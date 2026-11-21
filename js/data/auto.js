@@ -1,4 +1,4 @@
-export const AUTO = {
+export let AUTO = {
   on: false,
   state: 'off',
   sol: null,

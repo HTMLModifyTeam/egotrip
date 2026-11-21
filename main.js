@@ -7,9 +7,8 @@ import { FACES, FACE_DEF, PEOPLE_MAT, SHOCK_FACES } from './js/data/faces.js';
 import { AUTO, AUTO_LOOK } from './js/data/auto.js';
 import { PC, QUAL } from "./js/data/harmony.js";
 import { Soloist } from './js/audio/soloist.js';
-import { SusVoice } from './js/audio/susvoice.js';
+import SusVoice from './js/audio/susvoice.js';
 import { Improviser } from './js/audio/improviser.js';
-import BED from './js/audio/BED.js';
 import { stopBandVoices, trackBandVoice } from './js/audio/BandVoice.js';
 import { latheY } from './js/utils/GeomUtils.js';
 import { clamp, smooth01, lerp, rateFor, damp, mod12, smoothstep, dampAngle } from './js/utils/Math.js';
@@ -346,7 +345,6 @@ const AE = {
   buses: {},
   sets: {},
   syn: {},
-  synP: null,
   noise: null,
   master: null,
   startedAt: 0
@@ -477,8 +475,7 @@ function synthKick(ctx) {
 }
 
 function synthHat(ctx, open = false) {
-  const sr = ctx.sampleRate,
-    n = Math.floor((open ? 0.5 : 0.09) * sr);
+  const sr = ctx.sampleRate, n = Math.floor((open ? 0.5 : 0.09) * sr);
   let x = noiseArr(n);
   // 금속성: 고주파 사각파 몇 개 섞기
   const fs = [3270, 4710, 5550, 6790, 8410, 9960];
@@ -537,8 +534,7 @@ function synthTom(ctx, f0) {
 }
 
 function synthStickClick(ctx) {
-  const sr = ctx.sampleRate,
-    n = Math.floor(0.12 * sr);
+  const sr = ctx.sampleRate, n = Math.floor(0.12 * sr);
   let x = noiseArr(n);
   x = filt(filt(x, 'bp', 2400, 3, sr), 'peak', 1150, 6, sr, 10);
   for (let i = 0; i < n; i++) x[i] *= Math.exp(-i / sr * 60);
@@ -549,11 +545,7 @@ function synthClap(ctx) {
   const sr = ctx.sampleRate,
     n = Math.floor(0.14 * sr),
     x = new Float32Array(n);
-  const bursts = [
-    [0, 1],
-    [rand(0.002, 0.005), rand(0.5, 0.8)],
-    [rand(0.007, 0.012), rand(0.25, 0.45)]
-  ];
+  const bursts = [[0, 1], [rand(0.002, 0.005), rand(0.5, 0.8)], [rand(0.007, 0.012), rand(0.25, 0.45)]];
   const nz = noiseArr(n);
   for (const [o, a] of bursts) {
     const s = Math.floor(o * sr);
@@ -663,19 +655,6 @@ function synthApplause(ctx, dur, density) {
   return toBuf(ctx, fL.subarray(0, n - xf), 0.8, fR.subarray(0, n - xf));
 }
 
-function b64ToAB(s) {
-  const bin = atob(s), u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  return u.buffer;
-}
-
-async function decodeAB(ctx, ab) {
-  return new Promise((res, rej) => {
-    const p = ctx.decodeAudioData(ab, res, rej);
-    if (p && p.then) p.then(res, rej);
-  });
-}
-
 function synthRoomTone(ctx) {
   const sr = ctx.sampleRate,
     n = Math.floor(6 * sr);
@@ -690,6 +669,18 @@ function synthRoomTone(ctx) {
     b[i] = b[i] * k + b[n - xf + i] * (1 - k);
   }
   return toBuf(ctx, a.subarray(0, n - xf), 0.5, b.subarray(0, n - xf));
+}
+
+function b64ToAB(s) {
+  const bin = atob(s), u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u.buffer;
+}
+function decodeAB(ctx, ab) {
+  return new Promise((res, rej) => {
+    const p = ctx.decodeAudioData(ab, res, rej);
+    if (p && p.then) p.then(res, rej);
+  });
 }
 
 function createAudio() {
@@ -957,8 +948,7 @@ async function decodePack(onProgress) {
 function nearestSample(set, midi, rr = 0) {
   const arr = AE.sets[set];
   if (!arr || !arr.length) return null;
-  let best = null,
-    bd = 1e9;
+  let best = null, bd = 1e9;
   for (const s of arr) {
     if (rr && s.rr && s.rr !== rr) continue;
     const d = Math.abs(s.m - midi) + (s.m < midi ? 0.01 : 0);
@@ -1016,10 +1006,7 @@ function playOne(sample, midi, when, vel, dest, o = {}) {
     g.disconnect();
     if (out !== g) out.disconnect();
   };
-  return {
-    src,
-    g
-  };
+  return { src, g };
 }
 
 function playBuf(buf, when, vel, dest, o = {}) {
@@ -1071,7 +1058,7 @@ function cutVoice(v, when, fade = 0.012) {
 }
 
 // 지속 배경음 (방 소리, 박수 바탕)
-const bed = new BED(AE, AE.ctx);
+const bed = new BED(AE);
 
 // Render the existing procedural crowd sounds once, before play. A reaction then
 // needs one buffer voice instead of hundreds of live oscillators and formants.
@@ -1188,16 +1175,8 @@ function resetCrowdAudio() {
 // ===================== 관객 목소리 (말 없는 환호) =====================
 // 수십 명이 "아아아—" 하는 함성 바탕: 모음 포먼트를 통과한 소음 + 음높이 있는 목소리 몇 겹, 끝을 이어 붙여 반복
 function synthRoar(ctx, dur) {
-  const sr = ctx.sampleRate,
-    n = Math.floor(dur * sr),
-    L = new Float32Array(n),
-    R = new Float32Array(n);
-  const vowels = [
-    [750, 1200, 2600],
-    [550, 1800, 2600],
-    [450, 850, 2500],
-    [650, 1100, 2400]
-  ];
+  const sr = ctx.sampleRate, n = Math.floor(dur * sr), L = new Float32Array(n), R = new Float32Array(n);
+  const vowels = [[750, 1200, 2600], [550, 1800, 2600], [450, 850, 2500], [650, 1100, 2400]];
   // 톱니 근사(하모닉 8개) 한 주기를 표로 만들어 둠 (표본마다 sin 여덟 번 하던 것을 대신함)
   const SAWN = 2048,
     saw = new Float32Array(SAWN + 1);
@@ -1296,11 +1275,7 @@ function vjob(when, fn, o) {
   const q = VJOB.q;
   let i = q.length;
   while (i > 0 && q[i - 1].when > when) i--;
-  q.splice(i, 0, {
-    when,
-    fn,
-    o
-  });
+  q.splice(i, 0, { when, fn, o });
   // 더 이른 환호가 들어오면 먼 미래 작업의 대기 타이머를 앞당긴다.
   if (i === 0 && VJOB.timer != null) {
     clearTimeout(VJOB.timer);
@@ -1434,8 +1409,7 @@ function whistleCall(when, o = {}) {
   const ctx = AE.ctx;
   if (!ctx || vjob(when, whistleCall, o)) return;
   const fx = fxGraph();
-  const f = o.f || rand(1900, 2700),
-    kind = o.kind || pick(['up', 'wolf', 'trill']);
+  const f = o.f || rand(1900, 2700), kind = o.kind || pick(['up', 'wolf', 'trill']);
   const osc = fx.own(ctx.createOscillator());
   osc.type = 'sine';
   const g = fx.own(ctx.createGain());
@@ -1636,10 +1610,7 @@ function crowdGasp(when, n = 26, vol = 1) {
         vol: rand(0.05, 0.1) * vol,
         att: 0.012,
         hold: 0.4,
-        curve: [
-          [0, 1],
-          [1, 1.25]
-        ],
+        curve: [[0, 1], [1, 1.25]],
         breath: 0.6
       });
     }
@@ -1659,11 +1630,7 @@ function crowdOoh(when, n = 16, vol = 1, dur = 1.7) {
       vol: rand(0.06, 0.12) * vol,
       att: 0.18,
       hold: 0.7,
-      curve: [
-        [0, 0.82],
-        [0.65, 1.38],
-        [1, 1.12]
-      ],
+      curve: [[0, 0.82], [0.65, 1.38], [1, 1.12]],
       vib: 0.02,
       breath: 0.3
     });
@@ -1684,11 +1651,7 @@ function scream(when, o = {}) {
     vol: (o.vol || 0.2) * rand(0.75, 1),
     att: 0.05,
     hold: 0.55,
-    curve: [
-      [0, 0.9],
-      [0.25, 1.18],
-      [1, 0.82]
-    ],
+    curve: [[0, 0.9], [0.25, 1.18], [1, 0.82]],
     vib: 0.03,
     vibRate: rand(6, 7.5),
     rough: 0.45,
@@ -1779,8 +1742,7 @@ function glassCrash(when, o = {}) {
   ns.start(when, rand(0, 1));
   ns.stop(when + 0.4);
   for (let i = 0; i < 12; i++) {
-    const t = when + rand(0, 0.12) + (i > 8 ? rand(0.12, 0.35) : 0),
-      f = rand(2600, 8500);
+    const t = when + rand(0, 0.12) + (i > 8 ? rand(0.12, 0.35) : 0), f = rand(2600, 8500);
     const o2 = fx.own(ctx.createOscillator());
     o2.type = 'sine';
     o2.frequency.value = f;
@@ -1907,15 +1869,7 @@ function synthBabble(ctx, dur) {
     n = Math.floor(dur * sr),
     L = new Float32Array(n),
     R = new Float32Array(n);
-  const vw = [
-    [730, 1090, 2440],
-    [530, 1840, 2480],
-    [390, 2000, 2550],
-    [570, 840, 2410],
-    [440, 1020, 2240],
-    [300, 870, 2240],
-    [660, 1720, 2410]
-  ];
+  const vw = [[730, 1090, 2440], [530, 1840, 2480], [390, 2000, 2550], [570, 840, 2410], [440, 1020, 2240], [300, 870, 2240], [660, 1720, 2410]];
   for (let v = 0; v < 14; v++) {
     const fem = Math.random() < 0.5,
       f0b = fem ? rand(190, 260) : rand(100, 145),
@@ -1924,8 +1878,7 @@ function synthBabble(ctx, dur) {
       gr = Math.sqrt((1 + pan) / 2),
       amp = rand(0.4, 1);
     const seg = new Float32Array(n);
-    let ph = 0,
-      t = rand(0, 0.6);
+    let ph = 0, t = rand(0, 0.6);
     while (t < dur) {
       // 한 마디(말 덩어리): 음절 3~9개
       const syl = randi(3, 9);
@@ -2302,7 +2255,6 @@ function buildVenue(scene) {
   };
   const root = new THREE.Group();
   root.name = 'venue';
-  VENUE.root = root;
   scene.add(root);
   const cx = (R.x0 + R.x1) / 2,
     cz = (R.zFront + R.zBack) / 2,
@@ -6310,18 +6262,14 @@ function genBar(S, b) {
       drum('kick', b.t0, 0.8, 'RF');
       bassNote(b.t0, nearestPC(b.chords[0].root, 36, 29, 41), b.spb * 0.5, 1);
       compHit(b, 0, b.chords[0], 0.4, 0.6);
-      vq(b.t0, 'song', 'break', {
-        on: true
-      });
+      vq(b.t0, 'song', 'break', { on: true });
     }
     return;
   }
   if (S.brk && b.abs === S.brk.to + 1) {
     drum('crash', b.t0, 0.95, 'R');
     drum('kick', b.t0, 0.9, 'RF');
-    vq(b.t0, 'song', 'break', {
-      on: false
-    });
+    vq(b.t0, 'song', 'break', { on: false });
     S.brk = null;
   }
   const floor = (ph === 'solo' || ph === 'trades') ? S.floor : null;
@@ -6560,12 +6508,8 @@ function genFinal(S, b) {
     bassNote(t, root, 0.3, 1.0);
     PNO.voicing = voicingFor(ch, PNO.voicing, 55, 79);
     pianoNotes(t, [root + 12, ...PNO.voicing], 0.35, 0.75, 'L', 0.004);
-    tbnNote(t, nearestPC(ch.root + QUAL[ch.q].tones[1], 60, 55, 67), 0.35, 1.0, {
-      scoop: 0
-    });
-    vq(t, 'song', 'cut', {
-      button: true
-    });
+    tbnNote(t, nearestPC(ch.root + QUAL[ch.q].tones[1], 60, 55, 67), 0.35, 1.0, { scoop: 0 });
+    vq(t, 'song', 'cut', { button: true });
     MUS.endAt = t + 0.6;
     autoFinal(S, t, 'button');
     return;
@@ -6608,9 +6552,7 @@ function genFinal(S, b) {
 function fermataTick(now) {
   const F = MUS.fermata;
   if (!F || F.cut) {
-    if (F && F.cut && now > F.cut + 0.8) {
-      MUS.fermata = null;
-    }
+    if (F && F.cut && now > F.cut + 0.8) MUS.fermata = null;
     return;
   }
   if (TP.blowing) F.wasBlowing = true;
@@ -6738,9 +6680,7 @@ function endSong(now) {
   };
   MUS.beatBase = MUS.beatCount;
   MUS.beatT = now;
-  vq(now, 'song', 'gap', {
-    next: nextTune.id
-  });
+  vq(now, 'song', 'gap', { next: nextTune.id });
   if (FIN.req || FIN.on) MUS.gap.hold = true;
   else itlOnGap(); // 공연을 끝내는 중이면 다음 곡으로 넘어가지 않음
   afterSave();
@@ -6853,9 +6793,7 @@ const tpEmit = (type, d) => {
 // 트럼펫은 한 대: 새 음을 낼 때 앞에서 남은 소리를 전부 끊기 위해 기록
 function tpTrack(v) {
   if (!v) return v;
-  if (!(v instanceof SusVoice)) v.src.addEventListener('ended', () => {
-    v.ended = true;
-  });
+  if (!(v instanceof SusVoice)) v.src.addEventListener('ended', () => v.ended = true);
   for (let i = TP.all.length - 1; i >= 0; i--)
     if (TP.all[i].ended) TP.all.splice(i, 1);
   TP.all.push(v);
@@ -6985,11 +6923,7 @@ function autoDyn(t, m, o = {}) {
 }
 
 function recordNote(t, m, kind) {
-  TP.notes.push({
-    t,
-    m,
-    kind
-  });
+  TP.notes.push({ t, m, kind });
   if (TP.notes.length > 300) TP.notes.splice(0, 100);
 }
 
@@ -7048,19 +6982,15 @@ function phraseSlot(t) {
 function heldHarmonyTick(now) {
   const slot = phraseSlot(now);
   if (!slot) return;
-  const ch = chordAtTime(now + 0.01),
-    key = ch.name + '|' + slot.id;
+  const ch = chordAtTime(now + 0.01), key = ch.name + '|' + slot.id;
   if (TP.key === key) return;
   const changed = TP.chord !== ch.name;
   TP.chord = ch.name;
   TP.key = key;
   if (TP.passing) return;
-  const strong = !!FIN.req || slot.strong,
-    cur = Math.round(TP.cur);
+  const strong = !!FIN.req || slot.strong, cur = Math.round(TP.cur);
   if (noteOk(cur, ch, strong)) return;
-  const out = snapNow(now, cur, {
-    strong
-  });
+  const out = snapNow(now, cur, { strong });
   if (out !== TP.cur) moveTo(out, changed ? 'chord' : 'resolve', now + 0.003);
 }
 
@@ -7203,20 +7133,12 @@ function startShake(t) {
   const base = Math.round(TP.cur);
   let iv = 3;
   if (TP.mode === 'snap') {
-    const ch = chordAtTime(t),
-      up = stepAllowed(base, 1, ch, 'W');
+    const up = stepAllowed(base, 1, chordAtTime(t), 'W');
     iv = clamp(up - base, 2, 4);
   }
-  TP.shake = {
-    t0: t,
-    iv,
-    base
-  };
+  TP.shake = { t0: t, iv, base };
   shakeOn(TP.voice, t, iv);
-  tpEmit('shake', {
-    t,
-    on: true
-  });
+  tpEmit('shake', { t, on: true });
 }
 
 function endShake(t) {
@@ -7236,10 +7158,7 @@ function endShake(t) {
 // ---------- 입력 (0~1 위치) ----------
 function airReset(pos) {
   const tn = performance.now();
-  TP.air = [{
-    t: tn,
-    pos
-  }];
+  TP.air = [{ t: tn, pos }];
   TP.lastAirT = tn;
   TP.lastPos = pos;
   TP.lastMoveT = tn;
@@ -7324,15 +7243,9 @@ function ribbonMove(pos, o = {}) {
   const tn = performance.now();
   // Keep a time window for gestures; raw device polling rate must not grow the work.
   const last = TP.air[TP.air.length - 1];
-  if (last && tn - TP.lastAirT < 8) TP.air[TP.air.length - 1] = {
-    t: tn,
-    pos
-  };
+  if (last && tn - TP.lastAirT < 8) TP.air[TP.air.length - 1] = { t: tn, pos };
   else {
-    TP.air.push({
-      t: tn,
-      pos
-    });
+    TP.air.push({ t: tn, pos });
     TP.lastAirT = tn;
   }
   while (TP.air.length > 96 || (TP.air.length && tn - TP.air[0].t > 750)) TP.air.shift();
@@ -7353,12 +7266,11 @@ function flushRibbonMove(force = false) {
   if (!force && now - TP.lastPitchUpdate < 1 / 60) return;
   TP.pendingMove = false;
   TP.lastPitchUpdate = now;
-  const t = now + 0.003,
-    tn = performance.now();
+  const t = now + 0.003, tn = performance.now();
   if (TP.discrete) { // 키보드: 한 칸씩 곧바로
     TP.discrete = false;
     if (TP.shake) endShake(t);
-    TP.mv.st = 'rest';
+    TP.mv.st = 'rest'; 
     TP.key = slotKey(t);
     TP.passing = false;
     const out = TP.mode === 'free' ? clamp(Math.round(TP.target), TP.lo, TP.hi) : snapNow(t, null);
@@ -7460,15 +7372,11 @@ function landAt(t, tgt) {
 }
 
 function snapTo(t, moving, kind = 'slur') {
-  let out = snapNow(t, Math.round(TP.cur), {
-    moving
-  });
+  let out = snapNow(t, Math.round(TP.cur), { moving });
   // 미는 방향과 거꾸로 한 칸 되돌아가는 건 막음 (박이 바뀌며 허용 음이 달라져도 올라가는 중엔 올라가기만)
   if (moving && out !== TP.cur && Math.abs(out - TP.cur) <= 2) {
     const dir = Math.sign(fingerSpeed(performance.now()));
-    if (dir && Math.sign(out - TP.cur) === -dir && noteOk(Math.round(TP.cur), chordAtTime(t + 0.02), false, {
-      moving: true
-    })) out = TP.cur;
+    if (dir && Math.sign(out - TP.cur) === -dir && noteOk(Math.round(TP.cur), chordAtTime(t + 0.02), false, { moving: true })) out = TP.cur;
   }
   TP.key = slotKey(t);
   TP.passing = moving && !noteOk(out, chordAtTime(t + 0.02), isStrongTime(t));
@@ -7605,45 +7513,7 @@ function trumpetTick() {
   }
 }
 // 1인칭 트럼펫 밸브 모양 (실제 운지, 기보 = 콘서트+2)
-const FINGER = {
-  54: 7,
-  55: 5,
-  56: 6,
-  57: 3,
-  58: 1,
-  59: 2,
-  60: 0,
-  61: 7,
-  62: 5,
-  63: 6,
-  64: 3,
-  65: 1,
-  66: 2,
-  67: 0,
-  68: 6,
-  69: 3,
-  70: 1,
-  71: 2,
-  72: 0,
-  73: 3,
-  74: 1,
-  75: 2,
-  76: 0,
-  77: 1,
-  78: 2,
-  79: 0,
-  80: 6,
-  81: 3,
-  82: 1,
-  83: 2,
-  84: 0,
-  85: 3,
-  86: 1,
-  87: 2,
-  88: 0,
-  89: 1,
-  90: 2
-};
+const FINGER = { 54: 7, 55: 5, 56: 6, 57: 3, 58: 1, 59: 2, 60: 0, 61: 7, 62: 5, 63: 6, 64: 3, 65: 1, 66: 2, 67: 0, 68: 6, 69: 3, 70: 1, 71: 2, 72: 0, 73: 3, 74: 1, 75: 2, 76: 0, 77: 1, 78: 2, 79: 0, 80: 6, 81: 3, 82: 1, 83: 2, 84: 0, 85: 3, 86: 1, 87: 2, 88: 0, 89: 1, 90: 2 };
 const fingeringFor = m => FINGER[clamp(Math.round(m) + 2, 54, 90)] || 0;
 
 // ===== 52_soloist.js =====
@@ -9732,11 +9602,7 @@ function buildCrowdProp(m, kind) {
   g.name = 'audience-' + kind;
   g.visible = false;
   const add = (geo, col, pos = [0, 0, 0], basic = false) => {
-    const mesh = new THREE.Mesh(geo, basic ? new THREE.MeshBasicMaterial({
-      color: col
-    }) : toonMat(col, {
-      outline: 0.003
-    }));
+    const mesh = new THREE.Mesh(geo, basic ? new THREE.MeshBasicMaterial({ color: col }) : toonMat(col, { outline: 0.003 }));
     mesh.position.set(...pos);
     g.add(mesh);
     return mesh;
@@ -9774,9 +9640,7 @@ function buildCrowdProp(m, kind) {
       o.geometry.dispose();
       o.material.dispose();
     }
-    g.add(new THREE.Mesh(packed, PROP_TPL.mat || (PROP_TPL.mat = toonVC({
-      outline: 0.003
-    }))));
+    g.add(new THREE.Mesh(packed, PROP_TPL.mat || (PROP_TPL.mat = toonVC({ outline: 0.003 }))));
   }
   return g;
 }
@@ -10184,74 +10048,34 @@ function crowdUpdate(dt, t, beat) {
     burst = R.burst && t < R.burst.until ? R.burst : null;
   CROWD.me.copy(SC.camera ? SC.camera.position : V3(0, 2.4, 1));
   if (FIGHT.on) {
-    const age = t - FIGHT.t0;
-    const shocked = age < 0.85;
-    const scuffle = smooth01((age - 0.85) / 2.05);
-    const aftermath = smooth01((age - 2.9) / 0.75);
+    const age = t - FIGHT.t0, shocked = age < 1.05;
+    const rush = smooth01(Math.max(0, age - 1.05) / 2.1);
     for (const m of CROWD.list) {
-      const p = m.p;
-      if (!p.root.visible) continue;
-      const start = m.fightStart || (m.fightStart = p.root.position.clone());
-      const partner = m.fightPartnerStart || start;
-      const dx = start.x - partner.x, dz = start.z - partner.z;
-      const len = Math.hypot(dx, dz) || 1;
-      const sx = dx / len, sz = dz / len;
-      p.c.stand = 1;
-      p.c.groove = 0;
-      p.c.bounce = 0;
-      p.c.jump = 0;
-      p.c.look.set(partner.x, 1.25, partner.z);
-      if (age < 3.25) {
-        const face = shocked ? 'jawdrop' : 'angry';
-        if (m.fightFace !== face) { p.express(face, 0); m.fightFace = face; }
-        const closeX = (start.x + partner.x) * 0.5 + sx * 0.28;
-        const closeZ = (start.z + partner.z) * 0.5 + sz * 0.28;
-        p.root.position.set(lerp(start.x, closeX, scuffle), start.y, lerp(start.z, closeZ, scuffle));
-        p.root.rotation.y = Math.atan2(partner.x - p.root.position.x, partner.z - p.root.position.z);
-        p.c.lean = shocked ? 0 : 0.18 + Math.sin(t * 17 + m.phase0) * 0.16;
-        p.c.side = shocked ? 0 : Math.sin(t * 14 + m.phase0) * 0.32;
-        p.c.twist = shocked ? 0 : Math.sin(t * 19 + m.phase0) * 0.4;
-        p.c.headShake = shocked ? 0 : Math.sin(t * 22 + m.phase0) * 0.22;
-        p.c.step = shocked ? 0 : 0.85;
-        p.c.kneel = 0;
-        p.c.slump = 0;
-        p.update(Math.min(dt, .1), t, beat);
-      } else if (m.fightRole === 'flee') {
-        if (m.fightFace !== 'scared') { p.express('scream', 0); m.fightFace = 'scared'; }
-        const awayX = start.x / (Math.hypot(start.x, start.z + 7) || 1);
-        const awayZ = (start.z + 7) / (Math.hypot(start.x, start.z + 7) || 1);
-        const run = Math.min(1, (age - 3.25) / 2.0);
-        p.root.position.set(start.x + awayX * run * 4.5, start.y, start.z + awayZ * run * 4.5);
-        p.root.rotation.y = Math.atan2(awayX, awayZ);
-        p.c.look.set(p.root.position.x + awayX, 1.2, p.root.position.z + awayZ);
-        p.c.lean = 0.34;
-        p.c.step = 1;
-        p.c.headShake = Math.sin(t * 17 + m.phase0) * 0.12;
-        p.c.kneel = 0;
-        p.c.slump = 0;
-        p.update(Math.min(dt, .1), t, beat);
-        if (run >= 1) p.root.visible = false;
-      } else {
-        if (m.fightFace !== 'down') {
-          p.express('stunlaugh', 0);
-          m.fightFace = 'down';
-        }
-        p.root.position.set(start.x + sx * 0.22, Math.max(0, start.y - aftermath * 0.3), start.z + sz * 0.22);
-        p.c.look.set(start.x, 0.4, start.z);
-        p.c.lean = 0;
-        p.c.side = 0;
-        p.c.twist = 0;
-        p.c.step = 0;
-        p.c.kneel = aftermath;
-        p.c.slump = aftermath;
-        p.c.headTilt = Math.sin(t * 3 + m.phase0) * 0.07 * (1 - aftermath);
-        p.update(Math.min(dt, .1), t, beat);
-        p.root.rotation.z = (m.fightSide ? 1 : -1) * aftermath * 1.28;
+      const p = m.p; if (!p.root.visible) continue;
+      const mood = shocked ? 'shock' : 'angry';
+      if (m.fightFace !== mood) {
+        p.express(shocked ? 'jawdrop' : 'angry', 0);
+        m.fightFace = mood;
       }
+      const start = m.fightStart || (m.fightStart = p.root.position.clone());
+      const spread = (m.wild - 0.5) * 0.8;
+      const target = V3(CROWD.me.x + spread, 0, CROWD.me.z + 0.45 + (m.wild * 0.7));
+      if (!shocked) p.root.position.lerpVectors(start, target, rush);
+      p.root.rotation.y += (Math.atan2(CROWD.me.x - p.root.position.x, CROWD.me.z - p.root.position.z) - p.root.rotation.y) * Math.min(1, dt * 2);
+      p.c.stand = 1; p.c.lean = shocked ? 0 : 0.28 + rush * 0.22;
+      p.c.headTilt = shocked ? 0 : Math.sin(t * 9 + m.phase0) * 0.12;
+      p.c.headShake = shocked ? 0 : Math.sin(t * 18 + m.phase0) * 0.16;
+      p.c.step = shocked ? 0 : 0.5 + rush * 0.5; p.c.look.copy(CROWD.me);
+      p.update(Math.min(dt, .1), t, beat);
     }
-    if (age > 8.3 && !FIGHT.gameOver) {
+    if (!shocked && !FIGHT.gameOver && t > FIGHT.booUntil && AE.decoded && AE.ctx) {
+      FIGHT.booUntil = t + 1.5; const now = AE.ctx.currentTime;
+      for (let i = 0; i < 5; i++) voiceBlip(now + rand(0, .8), {dur: rand(.45, .8), f0: rand(115, 205), fem: false, v0: VOWEL.u, v1: VOWEL.u, vol: rand(.07, .14), att: .07, hold: .7, curve: [[0, 1.05], [.28, .94], [1, .72]], rough: .18, pan: rand(-.9, .9) });
+    }
+    aimCamera();
+    if (age > 5.0 && !FIGHT.gameOver) {
       FIGHT.gameOver = true;
-      document.getElementById('gameOver').classList.remove('hide');
+      document.getElementById("gameOver").classList.remove("hide");
     }
     return;
   }
@@ -12115,8 +11939,7 @@ function harmFor(m, t) {
 function spVoiceStart(t, m, lvl) {
   if (!AE.ctx || !SPX.pan) return;
   spVoiceStop(t, 0.02);
-  const hm = harmFor(m, t),
-    s = nearestSample('T', hm);
+  const hm = harmFor(m, t), s = nearestSample('T', hm);
   if (!s) return;
   const v = new SusVoice(AE.ctx, s, hm, t, SPX.pan, {
     level: lvl * SP_LEVEL,
@@ -13728,7 +13551,7 @@ async function startGame() {
     UI.el.startLabel.textContent = '곧 시작';
     try {
       if (AE.ctx.state !== 'running') AE.ctx.resume().catch(() => { });
-    } catch { }
+    } catch(e) { }
     return;
   }
   UI.starting = true;
@@ -15172,27 +14995,10 @@ const FIN_SLOTS = [
 ];
 // 사인받을 물건: 사인하는 면의 크기(m), 면이 몸통 앞으로 나온 정도, 사인할 수 있는 범위(면 안의 비율)
 const FIN_KINDS = {
-  lp: {
-    w: 0.31,
-    h: 0.31,
-    z: 0.0042
-  },
-  poster: {
-    w: 0.28,
-    h: 0.37,
-    z: 0.0026
-  },
-  tee: {
-    w: 0.4,
-    h: 0.34,
-    z: 0.0036,
-    rect: [0.15, 0.03, 0.85, 0.8]
-  },
-  book: {
-    w: 0.34,
-    h: 0.25,
-    z: 0.0094
-  },
+  lp: { w: 0.31, h: 0.31, z: 0.0042 },
+  poster: { w: 0.28, h: 0.37, z: 0.0026 },
+  tee: { w: 0.4, h: 0.34, z: 0.0036, rect: [0.15, 0.03, 0.85, 0.8] },
+  book: { w: 0.34, h: 0.25, z: 0.0094 },
 };
 const FIN_ORDER = ['lp', 'tee', 'poster', 'book'];
 const FIN_STYLES = ['grab', 'film', 'scream', 'grab', 'cry', 'wave', 'point', 'scream', 'film', 'grab', 'cry', 'wave', 'grab']; // 자리마다 하는 짓 (사인받는 사람 바로 옆은 물건을 가리지 않는 동작)
@@ -15306,18 +15112,15 @@ function fightStart() {
   REACT.burst = null;
   bed.set("applause", 0);
   bed.set("babble", 0);
-  for (let i = 0; i < CROWD.list.length; i++) {
-    const m = CROWD.list[i];
+  for (const m of CROWD.list) {
     m.fightStart = m.p.root.position.clone();
-    const pair = CROWD.list[i % 2 === 0 ? i + 1 : i - 1] || CROWD.list[(i + 1) % CROWD.list.length];
-    m.fightPartnerStart = pair ? pair.p.root.position.clone() : m.fightStart.clone();
-    m.fightSide = i % 2;
-    m.fightRole = Math.random() < 0.52 ? 'down' : 'flee';
     m.fightFace = 'shock';
     m.act = null;
     m.pending = null;
-    m.p.root.rotation.z = 0;
-    m.p.express('jawdrop', 1.15); m.p.c.stand = 1; m.p.c.step = 0; m.p.c.lean = 0;
+    m.p.express('jawdrop', 1.15);
+    m.p.c.stand = 1;
+    m.p.c.step = 0;
+    m.p.c.lean = 0;
   }
   for (const m of BAND.members) stare(m, 4.8, 'jawdrop', 0.9);
   aimCamera();
@@ -15363,13 +15166,9 @@ function finRequest() {
     if (MUS.gap) MUS.gap.hold = true;
     genFinal({
       final: MUS.gapChord || chordAtTime(now),
-      tune: {
-        ending: 'fermata'
-      },
+      tune: { ending: 'fermata' },
       showEnd: true
-    }, {
-      t0: now + 0.06
-    });
+    }, { t0: now + 0.06 });
   } else {
     if (!S) finStab(now);
     finBegin();
@@ -15386,9 +15185,7 @@ function finStab(now) {
   drum('snare', t, 0.8, 'L');
   bassNote(t, root, 0.5, 1.0);
   pianoNotes(t, [root + 12, ...voicingFor(ch, null, 55, 80)], 0.7, 0.75, 'L', 0.004);
-  tbnNote(t, nearestPC(ch.root + QUAL[ch.q].tones[1], 60, 55, 67), 0.5, 1.0, {
-    scoop: 0
-  });
+  tbnNote(t, nearestPC(ch.root + QUAL[ch.q].tones[1], 60, 55, 67), 0.5, 1.0, { scoop: 0 });
 }
 
 function finUI() {
@@ -15415,17 +15212,7 @@ function finUI() {
 function finLayout() {
   const hy = Math.tan((SC.baseFov || SC.camera.fov) * Math.PI / 360),
     hx = hy * SC.camera.aspect;
-  const T = Object.assign(SC.portrait ? {
-    al: 54,
-    fw: 0.62,
-    fh: 0.47,
-    low: 0.84
-  } : {
-    al: 42,
-    fw: 0.62,
-    fh: 0.54,
-    low: 0.91
-  }, FIN.tune || {});
+  const T = Object.assign(SC.portrait ? { al: 54, fw: 0.62, fh: 0.47, low: 0.84 } : { al: 42, fw: 0.62, fh: 0.54, low: 0.91 }, FIN.tune || {});
   const al = T.al * Math.PI / 180,
     C = V3(0, T.cy || 1.84, T.cz || 0.04),
     box = 0.34;
@@ -15438,18 +15225,7 @@ function finLayout() {
   const pitch = -al - Math.atan(yc * hy);
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, 0, 0, 'YXZ'));
   const iq = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V3(1, 0, 0), up, n));
-  FIN.lay = {
-    C,
-    D,
-    n,
-    up,
-    eye,
-    pitch,
-    q,
-    iq,
-    hx,
-    hy
-  };
+  FIN.lay = { C, D, n, up, eye, pitch, q, iq, hx, hy };
 }
 
 // ---------- 준비물: 사인받을 물건 · 펜 든 내 손 ----------
@@ -15478,9 +15254,7 @@ function finKindGeos() {
     [new THREE.CylinderGeometry(0.146, 0.146, 0.003, 30).rotateX(Math.PI / 2).translate(0.085, 0, -0.0075), '#1b1828']
   ]); // 판은 재킷 뒤에 (겹치면 외곽선이 재킷 앞으로 비쳐 나옴)
   // 포스터
-  G2.poster = _vm([
-    [rbox(0.28, 0.37, 0.004, 0.002, 1), '#fffaf0']
-  ]);
+  G2.poster = _vm([[rbox(0.28, 0.37, 0.004, 0.002, 1), '#fffaf0']]);
   // 흰 티셔츠 (어깨를 잡고 펼쳐 듦)
   {
     const s = new THREE.Shape();
@@ -15503,10 +15277,7 @@ function finKindGeos() {
       curveSegments: 8
     }).translate(0, 0, -0.003);
     const nk = new THREE.TorusGeometry(0.052, 0.0045, 6, 14, Math.PI).rotateZ(Math.PI).translate(0, 0.172, 0.003).scale(1, 0.9, 1);
-    G2.tee = _vm([
-      [sg, '#fffdf6'],
-      [nk, '#e6dcc8']
-    ]);
+    G2.tee = _vm([[sg, '#fffdf6'], [nk, '#e6dcc8']]);
   }
   // 스케치북: 파란 표지 + 종이 + 위쪽 스프링
   {
@@ -15527,8 +15298,7 @@ function finMakeItem() {
   const g = new THREE.Group();
   g.name = 'sign-item';
   g.visible = false;
-  const G2 = finKindGeos(),
-    kinds = {};
+  const G2 = finKindGeos(), kinds = {};
   for (const k in G2) kinds[k] = new THREE.Mesh(G2[k], FIN.mat);
   for (const k in kinds) {
     kinds[k].visible = false;
@@ -16124,10 +15894,7 @@ function finRingPose(fan, t, dt, F) {
   switch (style) {
     case 'grab': {
       const open = Math.sin(t * 9 + fan.ph) > 0;
-      for (const [sd, s] of [
-        ['L', -1],
-        ['R', 1]
-      ]) p.reach(sd, F.c.clone().addScaledVector(toCam, 0.44).addScaledVector(F.r, s * 0.17).addScaledVector(UPY, 0.14 + Math.sin(t * 6 + fan.ph + s) * 0.05), null, null, open ? 'spread' : 'grip');
+      for (const [sd, s] of [['L', -1], ['R', 1]]) p.reach(sd, F.c.clone().addScaledVector(toCam, 0.44).addScaledVector(F.r, s * 0.17).addScaledVector(UPY, 0.14 + Math.sin(t * 6 + fan.ph + s) * 0.05), null, null, open ? 'spread' : 'grip');
       sceneFace(p, fan.ph > 3.1 ? 'ecstasy' : 'scream');
       p.c.jump = 0.9;
       p.c.lean = 0.16;
@@ -16477,9 +16244,7 @@ function finSigned() {
       vol: 0.2,
       pan: 0
     });
-    if (Math.random() < 0.6) whistleCall(now + 0.4, {
-      vol: 0.05
-    });
+    if (Math.random() < 0.6) whistleCall(now + 0.4, { vol: 0.05 });
   }
   for (let i = 0; i < 3; i++) REACT.later(0.15 + i * 0.22, () => {
     const f = pick(FIN.fans.filter(o => o.st === 'ring'));
@@ -16672,16 +16437,7 @@ function finReact(fan, t, dt, F) {
           base = mouthWorld(p);
         const up = cam.clone().sub(base).normalize().multiplyScalar(0.5).add(V3(0, 0.22, 0)); // 내 쪽으로 떠오름
         const pos = base.clone().addScaledVector(up, rise).add(_fv.set(Math.sin(b * 2.3) * 0.06 * rise, Math.sin(b * 3.3) * 0.03, 0)).lerp(base, back);
-        m.act = {
-          k: 'fin',
-          hold: {
-            soul: {
-              pos,
-              q: faceQ(pos, cam),
-              s: (0.25 + 0.85 * rise) * (1 - back * 0.75)
-            }
-          }
-        };
+        m.act = { k: 'fin', hold: { soul: { pos, q: faceQ(pos, cam), s: (0.25 + 0.85 * rise) * (1 - back * 0.75) } } };
       }
       if (b > 2.9) {
         fan.slow = true;
@@ -17233,9 +16989,7 @@ function setupMe() {
   ME.horn = horn;
   const mats = {
     skin: toonMat('#f1b892'),
-    nail: toonMat('#f9d9c8', {
-      outline: 0.003
-    }),
+    nail: toonMat('#f9d9c8', { outline: 0.003 }),
     sleeve: toonMat('#d23b4f'),
     cuff: toonMat('#fff6e6')
   };
@@ -17359,32 +17113,11 @@ function setupMouthpieceRig(mats) {
 }
 
 function placeMe() {
-  ME.pose = SC.portrait ? {
-    bell: V3(-0.035, -0.262, -0.42),
-    pitch: 0.36,
-    yaw: 0.05,
-    scale: 0.9
-  } : {
-    bell: V3(-0.01, -0.104, -0.42),
-    pitch: 0.46,
-    yaw: 0.03,
-    scale: 0.9
-  };
+  ME.pose = SC.portrait ? { bell: V3(-0.035, -0.262, -0.42), pitch: 0.36, yaw: 0.05, scale: 0.9 } : { bell: V3(-0.01, -0.104, -0.42), pitch: 0.46, yaw: 0.03, scale: 0.9 };
   ME.dbl = doublePose();
   // 마우스피스 쥔 손: 화면 안 같은 자리에 오도록 화면 비율로 계산
-  const hy = Math.tan(SC.vmCam.fov * Math.PI / 360),
-    hx = hy * SC.vmCam.aspect;
-  const m = Object.assign(SC.portrait ? {
-    sx: -0.2,
-    sy: -0.76,
-    z: 0.29,
-    s: 1.25
-  } : {
-    sx: -0.04,
-    sy: -0.74,
-    z: 0.44,
-    s: 1.08
-  }, ME.mpTune || {});
+  const hy = Math.tan(SC.vmCam.fov * Math.PI / 360), hx = hy * SC.vmCam.aspect;
+  const m = Object.assign(SC.portrait ? { sx: -0.2, sy: -0.76, z: 0.29, s: 1.25 } : { sx: -0.04, sy: -0.74, z: 0.44, s: 1.08 }, ME.mpTune || {});
   ME.mpPose = {
     p: V3(m.sx * hx * m.z, m.sy * hy * m.z, -m.z),
     s: m.s
@@ -17574,8 +17307,7 @@ function updateMe(dt, t) {
     }
   }
 }
-const _mv = new THREE.Vector3(),
-  _md2 = new THREE.Vector3();
+const _mv = new THREE.Vector3(), _md2 = new THREE.Vector3();
 
 // ===== 90_main.js =====
 // ===================== 장면 · 시작 · 루프 =====================
@@ -17659,8 +17391,7 @@ function onResize() {
 }
 
 function aimCamera() {
-  const e = LAYOUT.eye,
-    l = LAYOUT.look;
+  const e = LAYOUT.eye, l = LAYOUT.look;
   SC.camera.position.set(e[0], e[1], e[2]);
   // 세로 화면은 오른쪽 줄기가 가리는 만큼 시선을 살짝 오른쪽으로 (무대 가운데가 화면 왼쪽 빈 곳에 오게)
   SC.camera.lookAt(l[0] + (SC.portrait ? 0.85 : 0.3), SC.portrait ? l[1] - 0.85 : l[1], l[2]);
@@ -17671,7 +17402,7 @@ function aimCamera() {
     SC.camera.quaternion.slerp(FIN.lay.q, k);
   }
   if (FIGHT.on) {
-    const fall = smooth01((NOW.t - FIGHT.t0 - 5.2) / 1.5);
+    const fall = smooth01((NOW.t - FIGHT.t0 - 1.55) / 1.45);
     FIGHT.fall = fall; SC.camera.position.y -= fall * 1.28; SC.camera.position.z += fall * 0.35;
     SC.camera.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(fall * 0.32, 0, -fall * 1.22, "XYZ")));
   }
@@ -17724,8 +17455,10 @@ function frame(dt) {
   updateWindowFaces(dt, t, beat);
   fxUpdate(dt);
   updateMe(dt, t);
-  if (VENUE && VENUE.setMood) VENUE.setMood(REACT.frenzy, t);
-  if (VENUE && VENUE.update) VENUE.update(dt, t);
+  if (VENUE) {
+    if (VENUE.setMood) VENUE.setMood(REACT.frenzy, t);
+    if (VENUE.update) VENUE.update(dt, t);
+  }
   uiTick();
   vjobTick();
 }
@@ -17741,9 +17474,7 @@ function render() {
     SC.effect.render(SC.scene, SC.camera);
     R.clearDepth();
     SC.effect.render(SC.vmScene, SC.vmCam);
-  } finally {
-    PEOPLE.drawing = false;
-  }
+  } finally { PEOPLE.drawing = false; }
 }
 // ---------- 미리 만들어 두기 ----------
 // 공연 도중 처음 만들거나 처음 그리면 그 순간 화면이 멈칫하는 것들을 첫 화면에서 조금씩 만들어 둠:
@@ -17827,9 +17558,7 @@ const PERF = {
   shadowEvery: 2,
   skipNext: false
 };
-document.addEventListener('visibilitychange', () => {
-  PERF.skipNext = true;
-});
+document.addEventListener('visibilitychange', () => PERF.skipNext = true);
 
 function perfTick(rawDt) {
   if (GAME.state !== 'play' || document.hidden || rawDt <= 0 || PERF.skipNext) {

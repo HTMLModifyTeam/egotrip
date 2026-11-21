@@ -183,8 +183,7 @@ export class Soloist {
     const endLen = o.endLen ?? (this.fast ? pick([1.5, 2, 2.5]) : pick([1, 1.5, 2]));
     const body = Math.max(0.5, len - endLen);
     while (p < body - EPS) {
-      const at = B0 + p,
-        room = body - p;
+      const at = B0 + p, room = body - p;
       if (!this.isInt(at)) { // 뒷박에서 시작하면 8분 하나로 박에 맞춤
         ev.push({
           B: at,
@@ -194,8 +193,7 @@ export class Soloist {
         p += 0.5;
         continue;
       }
-      const r = Math.random(),
-        fits = room >= 1 - EPS;
+      const r = Math.random(), fits = room >= 1 - EPS;
       if (r < trip && fits) {
         for (let k = 0; k < 3; k++) ev.push({
           B: at + k / 3,
@@ -335,7 +333,7 @@ export class Soloist {
   }
   between(a, T, ch, e = {}) {
     if (T == null) return stepAllowed(a, this.dir, ch, 'W');
-    if (e.len != null && e.len <= 0.26) { // 16분: 음계로 한 걸음
+    if (e.len != null && e.len <= 0.26) {
       const dd = Math.sign(T - a) || this.dir;
       return Math.abs(T - a) <= 1 ? a + dd : stepAllowed(a, dd, ch, 'W');
     }
@@ -370,8 +368,7 @@ export class Soloist {
     for (let i = 1; i < n; i++)
       if (ev[i].m > ev[pi].m) pi = i;
     ev.forEach((e, i) => {
-      const p = ev[i - 1],
-        q = ev[i + 1];
+      const p = ev[i - 1], q = ev[i + 1];
       const gap = p ? e.B - (p.B + p.len) : 1;
       if (!e.art) {
         let tongue = i === 0 || gap > 0.01 || !e.strong || e.trip === 0 || (p && (e.m === p.m || Math.abs(e.m - p.m) >= 7));

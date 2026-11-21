@@ -328,12 +328,10 @@ export class Person {
       const vTop = nkY - 0.02 * h, vBot = chY - 0.06 * h;
       const vs = new THREE.BufferGeometry();
       const vz = (y, x) => Math.sqrt(Math.max(0, 1 - Math.pow(x / (profR(y) + 0.008), 2))) * (profR(y) + 0.008) * 0.72 + 0.001;
-      const pos = [],
-        idx = [];
+      const pos = [], idx = [];
       const N = 6;
       for (let k = 0; k <= N; k++) {
-        const y = lerp(vBot, vTop, k / N),
-          hw2 = lerp(0.004, 0.07 * w, k / N);
+        const y = lerp(vBot, vTop, k / N), hw2 = lerp(0.004, 0.07 * w, k / N);
         for (const xx of [-hw2, 0, hw2]) pos.push(xx, y, vz(y, xx));
       }
       for (let k = 0; k < N; k++) {
@@ -348,8 +346,7 @@ export class Person {
         const tg = new THREE.BufferGeometry(),
           tp = [],
           ti = [];
-        const knotY = vTop - 0.025 * h,
-          tipY = vBot - 0.1 * h;
+        const knotY = vTop - 0.025 * h, tipY = vBot - 0.1 * h;
         const pts = [
           [0, vTop - 0.005],
           [0.016, knotY],
@@ -373,9 +370,7 @@ export class Person {
     if (!isDress) {
       rig.add(latheY([[0.001, hipY - 0.13 * h], [0.15 * w, hipY - 0.115 * h], [0.168 * w, hipY - 0.05 * h], [0.162 * w, hipY + 0.012 * h], [0.001, hipY + 0.014 * h]], sseg).scale(1, 1, 0.78), pants, Bn.hips);
       rig.add(G.tor(1, 0.06, sseg, 6).rotateX(Math.PI / 2), L.belt || '#2a1e1a', Bn.hips, M4([0, hipY + 0.005 * h, 0], 0, [0.163 * w, 0.18, 0.163 * w * 0.78]));
-    } else {
-      rig.add(latheY([[0.001, hipY - 0.04 * h], [0.17 * w, hipY - 0.03 * h], [0.24 * w, hipY - 0.3 * h], [0.27 * w, hipY - 0.42 * h], [0.001, hipY - 0.425 * h]], sseg).scale(1, 1, 0.85), L.dress || top, Bn.hips);
-    }
+    } else rig.add(latheY([[0.001, hipY - 0.04 * h], [0.17 * w, hipY - 0.03 * h], [0.24 * w, hipY - 0.3 * h], [0.27 * w, hipY - 0.42 * h], [0.001, hipY - 0.425 * h]], sseg).scale(1, 1, 0.85), L.dress || top, Bn.hips);
     // 목
     {
       const c = capBetween(V3(0, nkY - 0.04 * h, 0), V3(0, nkY + 0.1 * h, 0.01), 0.048 * w, seg);
@@ -403,8 +398,7 @@ export class Person {
         elB = V3(el.x, el.y - 0.015 * h, el.z),
         elT = V3(el.x, el.y + 0.01 * h, el.z);
       const sleeveKind = longSleeve ? (style === 'shirt' ? 'rolled' : 'long') : (style === 'tank' || style === 'dress' || style === 'none') ? 'none' : 'short';
-      const armR = 0.054 * w,
-        foreR = 0.046 * w;
+      const armR = 0.054 * w, foreR = 0.046 * w;
       if (sleeveKind === 'long' || sleeveKind === 'rolled') {
         const c = capBetween(shT, elB, armR + 0.004, seg);
         rig.add(c.g, sleeve, iu, c.m);
@@ -413,8 +407,8 @@ export class Person {
         rig.add(c.g, skin, iu, c.m);
       }
       if (sleeveKind === 'short') {
-        const sEnd = shT.clone().lerp(elB, 0.5);
-        const c = capBetween(shT, sEnd, armR + 0.012, seg);
+
+        const c = capBetween(shT, shT.clone().lerp(elB, 0.5), armR + 0.012, seg);
         rig.add(c.g, sleeve, iu, c.m);
       }
       if (sleeveKind === 'long') {
@@ -425,22 +419,18 @@ export class Person {
         rig.add(c.g, skin, iff, c.m);
       }
       if (sleeveKind === 'rolled') {
-        const rEnd = elT.clone().lerp(wr, 0.32);
-        const c = capBetween(elT, rEnd, foreR + 0.013, seg);
+        const c = capBetween(elT, elT.clone().lerp(wr, 0.32), foreR + 0.013, seg);
         rig.add(c.g, sleeve, iff, c.m);
       }
       if (sleeveKind === 'long') rig.add(G.tor(1, 0.3, seg, 6).rotateX(Math.PI / 2), L.cuff || shadeHex(sleeve, 0.85), iff, M4([wr.x, wr.y + 0.02 * h, wr.z], 0, [foreR + 0.004, foreR + 0.004, 0.03]));
       {
-        const covered = sleeveKind === 'long' || sleeveKind === 'rolled',
-          er = (covered ? armR + 0.003 : (armR + foreR) / 2) * 0.97;
+        const covered = sleeveKind === 'long' || sleeveKind === 'rolled', er = (covered ? armR + 0.003 : (armR + foreR) / 2) * 0.97;
         rig.add(G.sph(seg, 8), covered ? sleeve : skin, iff, M4([el.x, el.y - 0.004 * h, el.z], 0, [er, er, er]));
       }
       // 손: 손바닥 + 손가락 덩어리 + 검지 + 엄지 (손바닥은 몸 쪽(-sx·x)을 봄, 엄지는 앞(+z))
       const hy = wr.y;
       rig.add(G.sph(seg, 10), skin, ih, M4([wr.x, hy - 0.04 * h, wr.z + 0.004], 0, [0.027 * w, 0.048 * h, 0.046 * h]));
-      const fg = this.restW[Bn['fing' + s]],
-        ix = this.restW[Bn['index' + s]],
-        th = this.restW[Bn['thumb' + s]];
+      const fg = this.restW[Bn['fing' + s]], ix = this.restW[Bn['index' + s]], th = this.restW[Bn['thumb' + s]];
       rig.add(G.sph(seg, 10), skin, Bn['fing' + s], M4([fg.x, fg.y - 0.034 * h, fg.z - 0.01], 0, [0.024 * w, 0.042 * h, 0.036 * h]));
       {
         const c = capBetween(V3(ix.x, ix.y + 0.006, ix.z - 0.002), V3(ix.x, ix.y - 0.062 * h, ix.z - 0.002), 0.0135 * h, 8);
@@ -452,12 +442,8 @@ export class Person {
     }
     // ----- 다리 -----
     for (const s of PERSON_SIDES) {
-      const it = Bn['thigh' + s],
-        is = Bn['shin' + s],
-        ifo = Bn['foot' + s];
-      const hp = this.restW[it],
-        kn = this.restW[is],
-        an = this.restW[ifo];
+      const it = Bn['thigh' + s], is = Bn['shin' + s], ifo = Bn['foot' + s];
+      const hp = this.restW[it], kn = this.restW[is], an = this.restW[ifo];
       const legC = isDress ? skin : pants;
       {
         const c = capBetween(V3(hp.x, hp.y + 0.03 * h, hp.z), V3(kn.x, kn.y - 0.035 * h, kn.z), 0.09 * w, seg);
@@ -517,8 +503,7 @@ export class Person {
         mw = mp.w;
       // 가운데는 입 뼈, 양끝은 입꼬리 뼈 (입 안 어둠은 같은 모양을 따라가는 안쪽 뼈들)
       const split = (ce, cl, cr) => p => {
-        const ax = Math.abs(p.x - hw.x);
-        const t = smoothstep(mw * 0.25, mw * 0.95, ax);
+        const t = smoothstep(mw * 0.25, mw * 0.95, Math.abs(p.x - hw.x));
         return p.x >= hw.x ? [[ce, 1 - t], [cl, t]] : [[ce, 1 - t], [cr, t]];
       };
       const m0 = [hw.x, hw.y + mp.y, hw.z + mp.z];

@@ -5,7 +5,7 @@ import { trackBandVoice } from '../audio/BandVoice.js';
 
 const TC = 2.5; // 'time'(대략 도달 시간) → setTargetAtTime 시정수 변환 계수
 
-export class SusVoice {
+export default class SusVoice {
   constructor(audio, sample, midi, when, dest, o = {}) {
     const ctx = audio;
     this.s = sample;
