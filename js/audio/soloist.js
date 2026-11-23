@@ -16,8 +16,8 @@ const TUNING = {
   blues: 0.26
 };
 
-export class Soloist {
-  constructor(audio, o) {
+export default class Soloist {
+  constructor(o) {
     Object.assign(this, {
       lo: 57,
       hi: 86,
@@ -37,7 +37,6 @@ export class Soloist {
     this.fast = this.bpm >= 196;
     this.slow = this.bpm < 116;
     this.cursor = this.startB;
-    this.ctx = audio.ctx;
   }
   // ───────────── 진행도와 세기 ─────────────
   // 낮고 듬성듬성 → 촘촘하고 높게 → 80% 지점 절정 → 내려와 마무리

@@ -7,7 +7,7 @@ import { nearestAllowed, nearestPC } from '../utils/Harmony.js';
 const EPS = 1e-6;
 const snapHalf = x => Math.round(x * 2) / 2; // 8분음표 격자로 맞춤
 
-export class Improviser {
+export default class Improviser {
   constructor(o = {}) {
     Object.assign(this, {
       lo: 52,

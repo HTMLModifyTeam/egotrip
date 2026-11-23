@@ -566,14 +566,14 @@ export class Person {
     const self = this, root = this.root, sk = mesh.skeleton, skUpdate = sk.update;
     this.dirty = true;
     this.skDirty = true;
-    root.updateMatrixWorld = (force) => {
+    root.updateMatrixWorld = function(force) {
       if (PEOPLE.drawing) {
         if (!self.dirty) return;
         self.dirty = false;
       }
       PERSON_SYNC.call(root, force);
     };
-    sk.update = () => {
+    sk.update = function() {
       if (!self.skDirty) return;
       self.skDirty = false;
       skUpdate.call(sk);

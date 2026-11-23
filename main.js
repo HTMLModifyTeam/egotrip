@@ -6,9 +6,10 @@ import { STYLE, BONE, NOW, PEOPLE } from './js/data/data.js';
 import { FACES, FACE_DEF, PEOPLE_MAT, SHOCK_FACES } from './js/data/faces.js';
 import { AUTO, AUTO_LOOK } from './js/data/auto.js';
 import { PC, QUAL } from "./js/data/harmony.js";
-import { Soloist } from './js/audio/soloist.js';
+import Soloist from './js/audio/soloist.js';
 import SusVoice from './js/audio/susvoice.js';
-import { Improviser } from './js/audio/improviser.js';
+import Improviser from './js/audio/improviser.js';
+import BED from './js/audio/BED.js';
 import { stopBandVoices, trackBandVoice } from './js/audio/BandVoice.js';
 import { latheY } from './js/utils/GeomUtils.js';
 import { clamp, smooth01, lerp, rateFor, damp, mod12, smoothstep, dampAngle } from './js/utils/Math.js';
@@ -782,8 +783,9 @@ function synthWorkerSrc() {
     ' for (const s of SYNTH_STEPS) { const r = s[1](ctx); out[s[0]] = Array.isArray(r) ? r.map(pack) : pack(r); }' +
     ' postMessage(out, tr); };';
 }
+
 // onStart: 합성이 실제로 돌기 시작했을 때(워커가 떴을 때, 또는 워커를 못 써서 본 화면에서 만들기로 했을 때) 한 번 부름
-async function synthBegin(onStart) {
+function synthBegin(onStart) {
   if (AE.synP) {
     if (onStart) onStart();
     return AE.synP;
@@ -811,6 +813,7 @@ async function synthBegin(onStart) {
     AE.at.syn = performance.now();
     return S;
   };
+
   AE.synP = new Promise(resolve => {
     let done = false,
       alive = false,
@@ -864,7 +867,7 @@ const PACK = {
   on: null
 };
 
-function packBegin() {
+async function packBegin() {
   if (!PACK.p) {
     PACK.p = decodePack(f => {
       PACK.f = f;
@@ -874,6 +877,7 @@ function packBegin() {
   }
   return PACK.p;
 }
+
 // 트럼펫 지속음 녹음의 음정 보정값(센트). 고리 구간의 실제 음높이를 재서 평균율 기준으로 맞춤.
 const T_TUNE = {
   T57: 2.6,
@@ -10432,7 +10436,7 @@ function crowdWhoops(n, kind) {
 }
 
 function crowdSound(dt, t, f, burst) {
-  if (!AE.decoded || !bed.TABLE.applause) return;
+  if (!AE.decoded || !bed.layers.applause) return;
   // 박수 바탕
   let clap = 0,
     big = 0;
@@ -10566,20 +10570,13 @@ const REACT = {
     });
   },
   later(sec, fn) {
-    this.timers.push({
-      t: NOW.t + sec,
-      fn
-    });
+    this.timers.push({ t: NOW.t + sec, fn });
   },
 };
 const meNow = () => AE.ctx ? AE.ctx.currentTime : 0;
 // 관객·밴드 쪽에 "방금 일어난 일" 알림
 function reactEvent(kind, data = {}) {
-  REACT.events.push({
-    kind,
-    t: NOW.t,
-    ...data
-  });
+  REACT.events.push({ kind, t: NOW.t, ...data });
   if (REACT.events.length > 40) REACT.events.shift();
 }
 
@@ -13498,7 +13495,7 @@ function initUI() {
       createAudio();
       PACK.on = f => { UI.el.fill.style.width = Math.round(f * 100) + '%'; };
       PACK.on(PACK.f);
-      packBegin();
+      await packBegin();
       initTrumpet();
       spInitAudio();
       bed.start();
@@ -16653,7 +16650,7 @@ function finTick(dt, t) {
       if (!FIN.slots[0] && t - FIN.stageT > 1.5 && !FIN.fans.some(f => f.st === 'react')) finAdvance();
       const hush = !!cur && (!!FIN.draw || (FIN.ink > 0 && t - FIN.inkT < 2.2));
       FIN.hushK = damp(FIN.hushK, hush ? 1 : 0, 9, dt);
-      if (AE.decoded && bed.TABLE.babble) bed.set('babble', 0.12 * (1 - FIN.hushK), 0.3); // 쓰는 동안은 웅성거림도 뚝
+      if (AE.decoded && bed.layers.babble) bed.set('babble', 0.12 * (1 - FIN.hushK), 0.3); // 쓰는 동안은 웅성거림도 뚝
       // 여기저기서 터지는 외침
       if (AE.decoded && !hush && t > FIN.nextYell) {
         FIN.nextYell = t + rand(0.7, 2.3);
