@@ -10,6 +10,8 @@ import Soloist from './js/audio/soloist.js';
 import SusVoice from './js/audio/susvoice.js';
 import Improviser from './js/audio/improviser.js';
 import BED from './js/audio/BED.js';
+import SmellyScene from './js/scenes/SmellyScene.js';
+import MeteorScene from './js/scenes/MeteorScene.js';
 import { stopBandVoices, trackBandVoice } from './js/audio/BandVoice.js';
 import { latheY } from './js/utils/GeomUtils.js';
 import { clamp, smooth01, lerp, rateFor, damp, mod12, smoothstep, dampAngle } from './js/utils/Math.js';
@@ -8503,10 +8505,7 @@ function later(sec, fn) {
 }
 // 돌아서 나를 봄 (turn: 0~1, 서 있는 사람은 몸까지 돌림)
 function stare(m, dur, face = 'awe', turn = 1) {
-  m.stare = {
-    until: NOW.t + dur,
-    turn
-  };
+  m.stare = { until: NOW.t + dur, turn };
   if (face) m.express(face, dur);
 }
 
@@ -9054,47 +9053,18 @@ const CROWD = {
 };
 const FIGHT = { on: false, t0: 0, fall: 0, booUntil: 0 };
 const BAND_CRAZY = { until: 0 };
-const METEOR = { on: false, impacted: false, t0: 0, impactT: 0, bodyPhysics: [], debris: [], basePos: new THREE.Vector3(), baseQuat: new THREE.Quaternion(), start: new THREE.Vector3(), target: new THREE.Vector3(), flight: new THREE.Vector3(), up: new THREE.Vector3(), right: new THREE.Vector3(), shake: 0, group: null, light: null };
-const _cv1 = new THREE.Vector3(),
-  _cv2 = new THREE.Vector3(),
-  _cv3 = new THREE.Vector3();
+const _cv1 = new THREE.Vector3(), _cv2 = new THREE.Vector3(), _cv3 = new THREE.Vector3();
 
 function setupCrowd(scene) {
   const spots = [];
   const V = (typeof VENUE !== 'undefined' && VENUE) ? VENUE : null;
   if (V) {
-    for (const s of V.standSpots) spots.push({
-      kind: 'front',
-      pos: s.pos.clone(),
-      yaw: s.yaw,
-      seatY: s.seatY || 0.47
-    });
-    for (const s of V.seats) spots.push({
-      kind: 'seat',
-      pos: s.pos.clone(),
-      yaw: s.yaw,
-      seatY: s.seatY,
-      table: s.table
-    });
-    for (const s of (V.barSpots || [])) spots.push({
-      kind: 'bar',
-      pos: s.pos.clone(),
-      yaw: s.yaw,
-      seatY: s.stoolY
-    });
+    for (const s of V.standSpots) spots.push({ kind: 'front', pos: s.pos.clone(), yaw: s.yaw, seatY: s.seatY || 0.47 });
+    for (const s of V.seats) spots.push({ kind: 'seat', pos: s.pos.clone(), yaw: s.yaw, seatY: s.seatY, table: s.table });
+    for (const s of (V.barSpots || [])) spots.push({ kind: 'bar', pos: s.pos.clone(), yaw: s.yaw, seatY: s.stoolY });
   } else {
-    for (let i = 0; i < 14; i++) spots.push({
-      kind: 'front',
-      seatY: 0.47,
-      pos: V3(-4.5 + (i % 7) * 1.5 + rand(-0.3, 0.3), 0, -4.8 - Math.floor(i / 7) * 1.1),
-      yaw: 0
-    });
-    for (let i = 0; i < 16; i++) spots.push({
-      kind: 'seat',
-      pos: V3(-5 + (i % 8) * 1.4, 0, -8 - Math.floor(i / 8) * 2),
-      yaw: 0,
-      seatY: 0.46
-    });
+    for (let i = 0; i < 14; i++) spots.push({ kind: 'front', seatY: 0.47, pos: V3(-4.5 + (i % 7) * 1.5 + rand(-0.3, 0.3), 0, -4.8 - Math.floor(i / 7) * 1.1), yaw: 0 });
+    for (let i = 0; i < 16; i++) spots.push({ kind: 'seat', pos: V3(-5 + (i % 8) * 1.4, 0, -8 - Math.floor(i / 8) * 2), yaw: 0, seatY: 0.46 });
   }
   let seed = 101;
   for (const sp of spots) {
@@ -10047,10 +10017,13 @@ const CROWD_RATE = {
 
 function crowdUpdate(dt, t, beat) {
   if (METEOR.on && METEOR.impacted) return;
-  const R = REACT,
-    f = R.frenzy,
-    burst = R.burst && t < R.burst.until ? R.burst : null;
+  const R = REACT, f = R.frenzy, burst = R.burst && t < R.burst.until ? R.burst : null;
   CROWD.me.copy(SC.camera ? SC.camera.position : V3(0, 2.4, 1));
+  if (SMELLY.on) {
+    SMELLY.update(dt, t, beat);
+    return;
+  }
+
   if (FIGHT.on) {
     const age = t - FIGHT.t0, shocked = age < 1.05;
     const rush = smooth01(Math.max(0, age - 1.05) / 2.1);
@@ -13439,6 +13412,7 @@ function initUI() {
     fight: $('fight'),
     bandCrazy: $('bandCrazy'),
     meteor: $('meteor'),
+    smellyPerson: $('smellyPerson'),
     customMenu: $('customMenu'),
     customToggle: $('customToggle'),
     customPanel: $('customPanel'),
@@ -13463,7 +13437,8 @@ function initUI() {
   UI.el.customToggle.onclick = () => toggleCustomMenu();
   UI.el.fight.onclick = () => { closeCustomMenu(); fightStart(); };
   UI.el.bandCrazy.onclick = () => { closeCustomMenu(); makeBandCrazy(); };
-  UI.el.meteor.onclick = () => { closeCustomMenu(); meteorStart(); }
+  UI.el.meteor.onclick = () => { closeCustomMenu(); METEOR.begin(); }
+  UI.el.smellyPerson.onclick = () => { closeCustomMenu(); SMELLY.start(); }
   $('gameOverHome').onclick = () => location.reload();
   // 첫 화면은 아무 데나 눌러도 시작
   UI.el.title.addEventListener('click', e => {
@@ -15002,106 +14977,20 @@ const FIN_STYLES = ['grab', 'film', 'scream', 'grab', 'cry', 'wave', 'point', 's
 const _fv = new THREE.Vector3(), _fv2 = new THREE.Vector3(), _fv3 = new THREE.Vector3(), _fq = new THREE.Quaternion();
 // 펜 방향 (물건 면 기준): 끝에서 손 쪽으로 오른쪽 아래·내 쪽
 const FIN_PENQ = (() => {
-  const d = V3(0.5, -0.5, 0.72).normalize(),
-    a = V3(0, 1, 0).addScaledVector(d, -d.y).normalize(),
-    x = new THREE.Vector3().crossVectors(a, d);
+  const d = V3(0.5, -0.5, 0.72).normalize(), a = V3(0, 1, 0).addScaledVector(d, -d.y).normalize(), x = new THREE.Vector3().crossVectors(a, d);
   return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, a, d));
 })();
-
-// ---------- 끝내기 버튼 ----------
-function meteorStart() {
-  if (METEOR.on || FIGHT.on || !UI.playing || (GAME.phase !== 'play' && GAME.phase !== 'pre')) return;
-  if (!METEOR.group) return;
-  METEOR.on = true; METEOR.impacted = false; METEOR.t0 = NOW.t; METEOR.impactT = 0; METEOR.shake = 0;
-  METEOR.bodyPhysics.length = 0; METEOR.debris.length = 0;
-  setAuto(false);
-  releaseAllInput();
-  fingerVisual(null);
-  TP.blowing = false; TP.voice = null; MUS.running = false;
-  if (AE.ctx) stopBandVoices(AE.ctx.currentTime);
-  if (ITL.cur) itlEnd();
-  if (AE.ctx) {
-    bed.set('applause', 0);
-    bed.set('babble', 0);
-  }
-  for (const id of ['pause', 'fight', 'meteor', 'endShow', 'nextSong', 'hudMode', 'autoMode', 'special', 'finishHint', 'finBar', 'customMenu']) {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  }
-  document.getElementById('controls').classList.add('off');
-  const cam = SC.camera; cam.updateMatrixWorld(true);
-  METEOR.basePos.copy(cam.position); METEOR.baseQuat.copy(cam.quaternion);
-  cam.getWorldDirection(METEOR.flight).normalize();
-  METEOR.up.set(0, 1, 0).applyQuaternion(cam.quaternion).normalize();
-  METEOR.right.set(1, 0, 0).applyQuaternion(cam.quaternion).normalize();
-  METEOR.target.copy(cam.position).addScaledVector(METEOR.flight, 1.65);
-  METEOR.start.copy(METEOR.target).addScaledVector(METEOR.flight, 22).addScaledVector(METEOR.up, 8).addScaledVector(METEOR.right, 6);
-  METEOR.group.position.copy(METEOR.start); METEOR.group.visible = true;
-  METEOR.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), METEOR.target.clone().sub(METEOR.start).normalize());
-  METEOR.group.scale.setScalar(1.18);
-}
-
-function meteorImpact(t) {
-  METEOR.impacted = true; METEOR.impactT = t; METEOR.shake = 1;
-  METEOR.group.visible = false;
-  const source = METEOR.target;
-  const addBody = (object, weight = 1) => {
-    if (!object || !object.position || METEOR.bodyPhysics.some(b => b.object === object)) return;
-    const direction = new THREE.Vector3(rand(-1, 1), rand(0.15, 1.25), rand(-1, 1)).normalize();
-    const speed = rand(4.8, 10.5) * weight;
-    METEOR.bodyPhysics.push({ object, velocity: direction.multiplyScalar(speed), spin: new THREE.Vector3(rand(-5, 5), rand(-5, 5), rand(-5, 5)), floor: object.position.y, weight });
-  };
-  if (VENUE && VENUE.root) addBody(VENUE.root, 0.55);
-  for (const m of CROWD.list) if (m.p && m.p.root.visible) addBody(m.p.root, 1);
-  for (const m of BAND.members) if (m.root && m.root.visible) addBody(m.root, 1.05);
-  for (const object of SC.scene.children) if (object.visible && !object.isLight && !object.isCamera && object !== METEOR.group) addBody(object, 0.62);
-  for (let i = 0; i < 30; i++) {
-    const size = rand(0.08, 0.28), geo = new THREE.IcosahedronGeometry(size, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: pick(['#ff6835', '#ffc36d', '#6d4858', '#3a303f']), emissive: '#a73418', emissiveIntensity: rand(0.25, 0.8), roughness: 0.8 });
-    const shard = new THREE.Mesh(geo, mat); shard.position.copy(source).add(V3(rand(-0.6, 0.6), rand(-0.5, 0.6), rand(-0.6, 0.6))); SC.scene.add(shard);
-    const v = new THREE.Vector3(rand(-1, 1), rand(-0.1, 1.2), rand(-1, 1)).normalize().multiplyScalar(rand(4, 12));
-    METEOR.debris.push({ object: shard, velocity: v, spin: new THREE.Vector3(rand(-8, 8), rand(-8, 8), rand(-8, 8)), life: rand(2.3, 4.2) });
-  }
-  const eyebrow = document.querySelector('.game-over-eyebrow');
-  if (eyebrow) eyebrow.textContent = 'METEOR STRIKE';
-}
-
-function meteorUpdate(dt, t) {
-  if (!METEOR.on) return;
-  const age = t - METEOR.t0, impactAge = METEOR.impacted ? t - METEOR.impactT : 0;
-  if (!METEOR.impacted) {
-    const k = smooth01(age / 1.7);
-    METEOR.group.position.lerpVectors(METEOR.start, METEOR.target, k);
-    METEOR.group.rotation.x += dt * 1.8; METEOR.group.rotation.y += dt * 2.5;
-    METEOR.group.scale.setScalar(1.05 + k * 0.38);
-    const near = smooth01((age - 0.75) / 0.95);
-    METEOR.shake = near * 0.12;
-    if (age >= 1.7) meteorImpact(t);
-  }
-  const shake = METEOR.impacted ? Math.max(0, 1 - impactAge / 2.1) : METEOR.shake;
-  const cam = SC.camera;
-  cam.position.copy(METEOR.basePos).add(V3(Math.sin(t * 48) * shake * 0.17, Math.sin(t * 37 + 0.7) * shake * 0.14, Math.sin(t * 54 + 1.4) * shake * 0.08));
-  cam.quaternion.copy(METEOR.baseQuat).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(t * 33) * shake * 0.07, Math.sin(t * 41 + 1) * shake * 0.07, Math.sin(t * 45 + 2) * shake * 0.095)));
-  if (METEOR.impacted) {
-    for (const b of METEOR.bodyPhysics) {
-      const o = b.object; b.velocity.y -= 9.8 * dt; o.position.addScaledVector(b.velocity, dt);
-      o.rotation.x += b.spin.x * dt; o.rotation.y += b.spin.y * dt; o.rotation.z += b.spin.z * dt;
-      if (o.position.y < b.floor) { o.position.y = b.floor; b.velocity.y = Math.abs(b.velocity.y) * 0.24; b.velocity.x *= 0.68; b.velocity.z *= 0.68; b.spin.multiplyScalar(0.72); if (Math.abs(b.velocity.y) < 0.7) b.velocity.y = 0; }
-    }
-    for (const d of METEOR.debris) {
-      const o = d.object; d.velocity.y -= 9.8 * dt; o.position.addScaledVector(d.velocity, dt);
-      o.rotation.x += d.spin.x * dt; o.rotation.y += d.spin.y * dt; o.rotation.z += d.spin.z * dt;
-      d.life -= dt; o.scale.multiplyScalar(Math.max(0, 1 - dt * 0.7)); if (d.life <= 0) o.visible = false;
-    }
-    if (impactAge > 2.3 && !METEOR.gameOver) { METEOR.gameOver = true; document.getElementById('gameOver').classList.remove('hide'); }
-  }
-}
 
 function fightStart() {
   if (FIGHT.on || !UI.playing || (GAME.phase !== "play" && GAME.phase !== "pre")) return;
   FIGHT.on = true; FIGHT.t0 = NOW.t; FIGHT.booUntil = 0; FIGHT.gameOver = false;
-  FIN.req = true; setAuto(false); releaseAllInput(); fingerVisual(null);
-  TP.blowing = false; TP.voice = null; MUS.running = false;
+  FIN.req = true;
+  setAuto(false);
+  releaseAllInput();
+  fingerVisual(null);
+  TP.blowing = false;
+  TP.voice = null;
+  MUS.running = false;
   if (AE.ctx) stopBandVoices(AE.ctx.currentTime);
   if (ITL.cur) itlEnd();
   for (const id of ["fight", "endShow", "nextSong", "pause", "hudMode", "autoMode", "special", "finishHint", "finBar", "customMenu"]) { const el = document.getElementById(id); if (el) el.style.display = "none"; }
@@ -15197,7 +15086,7 @@ function finUI() {
   show(E.endShow, active && !FIN.req);
   show(E.fight, doomed);
   show(E.meteor, doomed);
-  show(E.customMenu, doomed && !FIN.req);
+  show(E.customMenu, doomed);
   show(E.hudMode, play && !FIGHT.on && !METEOR.on);
   show(E.special, play && !FIGHT.on && !METEOR.on, 'block');
   if (GAME.phase !== 'pre' && GAME.phase !== 'title') E.controls.classList.toggle('off', fin || FIGHT.on || METEOR.on);
@@ -16954,27 +16843,6 @@ function buildLeftHand(horn, mats) {
   return batchHandMeshes(g);
 }
 
-function setupMeteor() {
-  const group = METEOR.group = new THREE.Group();
-  const geo = new THREE.IcosahedronGeometry(1.25, 2);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const n = 1 + 0.16 * Math.sin(x * 19 + y * 23 + z * 29) + 0.07 * Math.sin(x * 41 - y * 17 + z * 13);
-    pos.setXYZ(i, x * n, y * n, z * n);
-  }
-  geo.computeVertexNormals();
-  const rock = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#4a3029', roughness: 0.86, emissive: '#a72e12', emissiveIntensity: 0.42 }));
-  rock.castShadow = true; group.add(rock);
-  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.68, 16, 12), new THREE.MeshBasicMaterial({ color: '#ff4b12', transparent: true, opacity: 0.72 }));
-  tail.position.z = 1.42; tail.scale.set(0.78, 0.78, 2.5); group.add(tail);
-  const core = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10), new THREE.MeshBasicMaterial({ color: '#ffd36a', transparent: true, opacity: 0.88 }));
-  core.position.z = 1.0; core.scale.set(0.58, 0.58, 2.1); group.add(core);
-  METEOR.light = new THREE.PointLight('#ff642b', 5, 16, 2);
-  group.add(METEOR.light);
-  group.visible = false; SC.scene.add(group);
-}
-
 function setupMe() {
   const rig = new THREE.Group();
   SC.vmScene.add(rig);
@@ -17323,7 +17191,32 @@ const GAME = {
   state: 'title',
   phase: 'title'
 };
+
+const SMELLY = new SmellyScene({
+  UI: UI,
+  GAME: GAME,
+  CROWD: CROWD,
+  FIGHT: FIGHT,
+  BAND: BAND,
+  SC: SC,
+  randomLook: randomLook,
+  stare: stare
+});
 let VENUE = null;
+const METEOR = new MeteorScene({
+  UI: UI,
+  GAME: GAME,
+  CROWD: CROWD,
+  FIGHT: FIGHT,
+  BAND: BAND,
+  SC: SC,
+  VENUE: VENUE, TP: TP, ITL: ITL, MUS: MUS, AE: AE,
+  setAuto: setAuto,
+  releaseAllInput: releaseAllInput,
+  fingerVisual: fingerVisual,
+  bed: bed
+});
+SMELLY.METEOR = METEOR;
 
 function initScene() {
   const canvas = document.getElementById('scene');
@@ -17414,7 +17307,7 @@ function boot() {
   setupBand(SC.scene);
   setupCrowd(SC.scene);
   setupMe();
-  setupMeteor();
+  METEOR.setup();
   bigInit();
   initUI();
   warmSetup();
@@ -17447,7 +17340,7 @@ function frame(dt) {
   finTick(dt, t);
   directorUpdate(dt, t, audible, beat);
   crowdUpdate(dt, t, beat);
-  meteorUpdate(dt, t);
+  METEOR.update(dt, t);
   hypeUpdate(dt, t, beat);
   updateWindowFaces(dt, t, beat);
   fxUpdate(dt);
@@ -17570,8 +17463,7 @@ function perfTick(rawDt) {
   PERF.n++;
   if (rawDt > 0.1) PERF.stalls++;
   if (PERF.acc < 3) return;
-  const avg = PERF.acc / PERF.n,
-    stalls = PERF.stalls;
+  const avg = PERF.acc / PERF.n, stalls = PERF.stalls;
   PERF.acc = 0;
   PERF.n = 0;
   PERF.stalls = 0;

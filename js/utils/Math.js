@@ -13,6 +13,13 @@ export const dampAngle = (cur, target, rate, dt) => {
 }
 
 export const lerp = MathUtils.lerp;
+export function lerpAngle(a, b, t) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
+}
+
 export const mod12 = x => ((x % 12) + 12) % 12;
 
 export const smooth01 = (t) => {

@@ -933,3 +933,10 @@ button {
     top: calc(10px + var(--sat))
   }
 }
+
+.smelly-action {
+  color: var(--paper);
+  background: #82913e;
+  font-weight: 900;
+  justify-content: center;
+}
