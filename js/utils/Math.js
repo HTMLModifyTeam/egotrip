@@ -2,6 +2,7 @@ import { MathUtils } from "three";
 
 export const rateFor = (s, midi, cents = 0) => Math.pow(2, (midi - s.m) / 12 + ((s.c || 0) + cents) / 1200);
 export const clamp = MathUtils.clamp;
+export const clamp01 = (x) => Math.min(1, Math.max(0, x));
 
 // 프레임 독립 감쇠 보간
 export const damp = MathUtils.damp;

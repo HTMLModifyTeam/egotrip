@@ -10,11 +10,12 @@ import Soloist from './js/audio/soloist.js';
 import SusVoice from './js/audio/susvoice.js';
 import Improviser from './js/audio/improviser.js';
 import BED from './js/audio/BED.js';
+import FightScene from './js/scenes/FightScene.js';
 import SmellyScene from './js/scenes/SmellyScene.js';
 import MeteorScene from './js/scenes/MeteorScene.js';
 import { stopBandVoices, trackBandVoice } from './js/audio/BandVoice.js';
 import { latheY } from './js/utils/GeomUtils.js';
-import { clamp, smooth01, lerp, rateFor, damp, mod12, smoothstep, dampAngle } from './js/utils/Math.js';
+import { clamp, clamp01, smooth01, lerp, rateFor, damp, mod12, smoothstep, dampAngle, lerpAngle } from './js/utils/Math.js';
 import { seeded, rand, pick, randi, shuffle } from './js/utils/Random.js';
 import { levelFor, dynGain, dynCut, chordAt } from './js/utils/Sound.js';
 import { parseChord, parseForm, inSet, isChordTone, isGuide, nearestAllowed, nearestPC, stepAllowed } from './js/utils/Harmony.js';
@@ -7276,7 +7277,7 @@ function flushRibbonMove(force = false) {
   if (TP.discrete) { // 키보드: 한 칸씩 곧바로
     TP.discrete = false;
     if (TP.shake) endShake(t);
-    TP.mv.st = 'rest'; 
+    TP.mv.st = 'rest';
     TP.key = slotKey(t);
     TP.passing = false;
     const out = TP.mode === 'free' ? clamp(Math.round(TP.target), TP.lo, TP.hi) : snapNow(t, null);
@@ -8103,12 +8104,7 @@ function autoEvents(now) {
       }
       recordNote(e.t, e.m, 'auto');
       fingerVisual(pitchToPos(e.m));
-      tpEmit(e.type, {
-        t: e.t,
-        m: e.m,
-        prev,
-        kind: 'auto'
-      });
+      tpEmit(e.type, { t: e.t, m: e.m, prev, kind: 'auto' });
       if (e.type === 'attack') musicOnMyAttack(now);
     } else if (e.type === 'release') {
       TP.blowing = false;
@@ -8117,17 +8113,8 @@ function autoEvents(now) {
       TP.lastOffT = e.t;
       AUTO.sounding = false;
       fingerVisual(null);
-      tpEmit('release', {
-        t: e.t,
-        dur: e.t - TP.noteT0,
-        m: TP.cur,
-        flick: e.flick
-      });
-    } else if (e.type === 'shake') tpEmit('shake', {
-      t: e.t,
-      on: e.on,
-      dur: e.dur
-    });
+      tpEmit('release', { t: e.t, dur: e.t - TP.noteT0, m: TP.cur, flick: e.flick });
+    } else if (e.type === 'shake') tpEmit('shake', { t: e.t, on: e.on, dur: e.dur });
     else if (e.type === 'special') {
       if (SPX.g >= 0.999 && !SPX.active && !SPX.held) spPress(true);
     }
@@ -8145,22 +8132,10 @@ const DIR = {
   slideT: 0,
   pluck: 0,
   bassM: 40,
-  pnX: {
-    L: -0.2,
-    R: 0.2
-  },
-  pnPress: {
-    L: 0,
-    R: 0
-  },
-  pnTarget: {
-    L: null,
-    R: null
-  },
-  hits: {
-    L: [],
-    R: []
-  },
+  pnX: { L: -0.2, R: 0.2 },
+  pnPress: { L: 0, R: 0 },
+  pnTarget: { L: null, R: null },
+  hits: { L: [], R: [] },
   countOff: 0,
   brushes: false,
   hatClose: 0
@@ -9051,7 +9026,6 @@ const CROWD = {
   roar: 0,
   clapBed: 0
 };
-const FIGHT = { on: false, t0: 0, fall: 0, booUntil: 0 };
 const BAND_CRAZY = { until: 0 };
 const _cv1 = new THREE.Vector3(), _cv2 = new THREE.Vector3(), _cv3 = new THREE.Vector3();
 
@@ -9202,9 +9176,7 @@ function chinPose(p, a, F) {
 }
 
 function runCrowdAct(m, t, beat) {
-  const p = m.p,
-    a = m.act,
-    F = frameOf(p);
+  const p = m.p, a = m.act, F = frameOf(p);
   if (a.story) {
     runCrowdScene(m, t);
     return;
@@ -10023,39 +9995,11 @@ function crowdUpdate(dt, t, beat) {
     SMELLY.update(dt, t, beat);
     return;
   }
-
   if (FIGHT.on) {
-    const age = t - FIGHT.t0, shocked = age < 1.05;
-    const rush = smooth01(Math.max(0, age - 1.05) / 2.1);
-    for (const m of CROWD.list) {
-      const p = m.p; if (!p.root.visible) continue;
-      const mood = shocked ? 'shock' : 'angry';
-      if (m.fightFace !== mood) {
-        p.express(shocked ? 'jawdrop' : 'angry', 0);
-        m.fightFace = mood;
-      }
-      const start = m.fightStart || (m.fightStart = p.root.position.clone());
-      const spread = (m.wild - 0.5) * 0.8;
-      const target = V3(CROWD.me.x + spread, 0, CROWD.me.z + 0.45 + (m.wild * 0.7));
-      if (!shocked) p.root.position.lerpVectors(start, target, rush);
-      p.root.rotation.y += (Math.atan2(CROWD.me.x - p.root.position.x, CROWD.me.z - p.root.position.z) - p.root.rotation.y) * Math.min(1, dt * 2);
-      p.c.stand = 1; p.c.lean = shocked ? 0 : 0.28 + rush * 0.22;
-      p.c.headTilt = shocked ? 0 : Math.sin(t * 9 + m.phase0) * 0.12;
-      p.c.headShake = shocked ? 0 : Math.sin(t * 18 + m.phase0) * 0.16;
-      p.c.step = shocked ? 0 : 0.5 + rush * 0.5; p.c.look.copy(CROWD.me);
-      p.update(Math.min(dt, .1), t, beat);
-    }
-    if (!shocked && !FIGHT.gameOver && t > FIGHT.booUntil && AE.decoded && AE.ctx) {
-      FIGHT.booUntil = t + 1.5; const now = AE.ctx.currentTime;
-      for (let i = 0; i < 5; i++) voiceBlip(now + rand(0, .8), {dur: rand(.45, .8), f0: rand(115, 205), fem: false, v0: VOWEL.u, v1: VOWEL.u, vol: rand(.07, .14), att: .07, hold: .7, curve: [[0, 1.05], [.28, .94], [1, .72]], rough: .18, pan: rand(-.9, .9) });
-    }
-    aimCamera();
-    if (age > 5.0 && !FIGHT.gameOver) {
-      FIGHT.gameOver = true;
-      document.getElementById("gameOver").classList.remove("hide");
-    }
+    FIGHT.updatethis(dt, t, beat);
     return;
   }
+
   // 누구를 볼까: 솔로하는 밴드 멤버
   let soloPos = CROWD.stageC;
   if (R.floor && R.floor !== 'me' && BAND[R.floor]) soloPos = BAND[R.floor].headWorld(_cv3).clone();
@@ -13283,10 +13227,8 @@ function bigOnEvent(ev) {
       }
       return true;
     }
-    case 'special':
-      return true;
-    case 'endless':
-      return true;
+    case 'special': return true;
+    case 'endless': return true;
     case 'welcomeBack': {
       crowdWhoops(5);
       if (Math.random() < 0.6) crowdWhistles(1);
@@ -13523,7 +13465,7 @@ async function startGame() {
     UI.el.startLabel.textContent = '곧 시작';
     try {
       if (AE.ctx.state !== 'running') AE.ctx.resume().catch(() => { });
-    } catch(e) { }
+    } catch (e) { }
     return;
   }
   UI.starting = true;
@@ -13675,7 +13617,7 @@ function bindInput() {
   };
   window.addEventListener('keydown', e => {
     if (!UI.playing) {
-      if ((e.code === 'Space' || e.code === 'Enter') && !UI.el.title.classList.contains('hide') && !(document.activeElement && document.activeElement.id === 'arcade')) {
+      if ((e.code === 'Space' || e.code === 'Enter') && !UI.el.title.classList.contains('hide')) {
         e.preventDefault();
         titleTap();
       }
@@ -13790,24 +13732,14 @@ const hypeOk = (k, gap) => {
 function faceQ(pos, target, out = new THREE.Quaternion()) {
   return out.setFromRotationMatrix(_hm.lookAt(target, pos, UPY));
 }
-const lerpYaw = (a, b, k) => {
-  let d = b - a;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return a + d * k;
-};
+
 const freeFans = () => CROWD.list.filter(m => !m.override && m.p.root.visible && !(m.act && m.act.story) && !m.pending);
 const panOf = p => clamp(p.root.position.x / 6, -0.9, 0.9);
 
 // ---------- 충격파: 무대에서 객석 뒤로 번지는 물결 (닿는 순간 몸이 뒤로 휙 젖혀짐) + 화면이 살짝 당겨짐 ----------
 function crowdShock(amp = 1, speed = 10) {
   CROWD.shockId = (CROWD.shockId || 0) + 1;
-  CROWD.shock = {
-    t0: NOW.t,
-    amp,
-    speed,
-    id: CROWD.shockId
-  };
+  CROWD.shock = { t0: NOW.t, amp, speed, id: CROWD.shockId };
   SC.punch = Math.max(SC.punch || 0, Math.min(1.2, amp));
 }
 
@@ -14641,7 +14573,7 @@ function runHypeScene(m, t, a, age, F) {
       const to = hf.sub(hm).setY(0),
         dist = to.length() || 1;
       const k = smoothstep(0.25, 0.7, age) * (1 - smoothstep(3.7, 4.2, age));
-      p.root.rotation.y = lerpYaw(m.spot.yaw, Math.atan2(to.x, to.z), k);
+      p.root.rotation.y = lerpAngle(m.spot.yaw, Math.atan2(to.x, to.z), k);
       m.walkOff = (m.walkOff || new THREE.Vector3()).copy(to).multiplyScalar(Math.max(0, dist - 0.46) * 0.5 / dist * k);
       if (k > 0.55) {
         const fc = f.p.chestWorld(_hv).clone();
@@ -15400,6 +15332,22 @@ function finBuildPen() {
   g.add(ellipsoid(V3(-0.0172, 0.0026, 0.04), V3(0.2, 0.2, -0.95), V3(0, 1, 0), [0.0066, 0.0054, 0.0022], mats.nail, 12));
   sleeveOn(g, W, W.clone().add(V3(-0.066, -0.066, 0.995).multiplyScalar(0.3)), mats);
   return pen;
+}
+
+function stopShow(bursting = false) {
+  setAuto(false);
+  releaseAllInput();
+  fingerVisual(null);
+  TP.blowing = false;
+  TP.voice = null;
+  MUS.running = false;
+  if (ITL.cur) itlEnd();
+  if (bursting) REACT.burst = null;
+  if (AE.ctx) {
+    stopBandVoices(AE.ctx.currentTime);
+    bed.set('applause', 0);
+    bed.set('babble', 0);
+  }
 }
 
 // ---------- 시작 ----------
@@ -16876,36 +16824,8 @@ function setupMe() {
   hold.add(horn);
   setupHorn2(mats);
   setupMouthpieceRig(mats);
-  setupFightHand();
+  FIGHT.setupHand();
   placeMe();
-}
-// Fight 전용 1인칭 제스처.
-function setupFightHand() {
-  const g = ME.fightHand = new THREE.Group();
-  SC.vmScene.add(g);
-  const skin = toonMat('#f1b892'), sleeve = toonMat('#d23b4f'), cuff = toonMat('#fff6e6');
-  const ball = (x, y, z, sx, sy, sz, mat = skin) => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), mat);
-    m.position.set(x, y, z); m.scale.set(sx, sy, sz); g.add(m);
-  };
-  const seg = (a, b, r = 0.018, mat = skin) => g.add(capsuleBetween(V3(...a), V3(...b), r, mat));
-  seg([0.10, -0.31, 0.02], [-0.015, -0.07, 0.015], 0.047, sleeve);
-  seg([0.015, -0.11, 0.005], [-0.01, -0.055, 0.005], 0.045, cuff);
-  ball(0, 0.005, 0, 0.087, 0.105, 0.035);
-  // The middle finger stays raised while the other fingers curl into a fist.
-  seg([-0.008, 0.066, -0.002], [-0.009, 0.15, -0.012], 0.021);
-  seg([-0.009, 0.15, -0.012], [-0.01, 0.245, -0.02], 0.018);
-  ball(-0.01, 0.244, -0.02, 0.018, 0.02, 0.017);
-  for (const x of [-0.052, 0.032, 0.061]) {
-    const y = x > 0.05 ? 0.045 : 0.055;
-    seg([x, y, -0.002], [x * 1.02, y - 0.035, -0.025], 0.017);
-    seg([x * 1.02, y - 0.035, -0.025], [x * 0.72, y - 0.052, -0.035], 0.016);
-    ball(x * 0.72, y - 0.052, -0.035, 0.016, 0.016, 0.014);
-  }
-  seg([0.069, -0.005, -0.002], [0.078, 0.038, -0.025], 0.021);
-  seg([0.078, 0.038, -0.025], [0.031, 0.029, -0.045], 0.019);
-  ball(0.031, 0.029, -0.045, 0.019, 0.018, 0.014);
-  g.visible = false;
 }
 // 두 번째 트럼펫: 왼손에 드는 거울상 (밸브를 왼손 손가락으로 누름)
 function setupHorn2(mats) {
@@ -17139,27 +17059,7 @@ function updateMe(dt, t) {
     if (k > 0.97) ME.hold.visible = false;
     if (ME.hold2) ME.hold2.visible = false;
   }
-  if (FIGHT.on && ME.fightHand) {
-    const age = Math.max(0, t - FIGHT.t0);
-    const d = 0.62, hy = Math.tan(SC.vmCam.fov * Math.PI / 360) * d;
-    const hx = hy * SC.vmCam.aspect;
-    const enter = smooth01(age / 0.45);
-    // starts dropping at 1.0s, fully down by 1.35s
-    const exit = smooth01(Math.min(1, Math.max(0, (age - 1.0) / 0.35)));
-
-    ME.hold.visible = false;
-    if (ME.hold2) ME.hold2.visible = false;
-    if (ME.mpRig) ME.mpRig.visible = false;
-
-    if (exit >= 1) {
-      ME.fightHand.visible = false;
-    } else {
-      ME.fightHand.visible = true;
-      ME.fightHand.position.set(hx * 0.22 + (1 - enter) * hx * 0.75, -hy * 0.02 - (1 - enter) * hy * 1.1 - exit * hy * 1.1, -d);
-      ME.fightHand.scale.setScalar(0.78);
-      ME.fightHand.rotation.set(0, 0, -0.16);
-    }
-  } else if (ME.fightHand) ME.fightHand.visible = false;
+  FIGHT.updateHand(t);
   if (ME.mpRig) {
     ME.mpRig.visible = ik < 0.6;
     if (ME.mpRig.visible) {
@@ -17192,17 +17092,21 @@ const GAME = {
   phase: 'title'
 };
 
-const SMELLY = new SmellyScene({
-  UI: UI,
+let VENUE = null;
+const FIGHT = new FightScene({
   GAME: GAME,
   CROWD: CROWD,
-  FIGHT: FIGHT,
-  BAND: BAND,
+  ME: ME,
+  UI: UI,
+  AE: AE,
   SC: SC,
-  randomLook: randomLook,
-  stare: stare
+  VOWEL: VOWEL,
+  stopShow: stopShow,
+  capsuleBetween: capsuleBetween,
+  toonMat: toonMat,
+  aimCamera: aimCamera,
+  voiceBlip: voiceBlip
 });
-let VENUE = null;
 const METEOR = new MeteorScene({
   UI: UI,
   GAME: GAME,
@@ -17210,13 +17114,27 @@ const METEOR = new MeteorScene({
   FIGHT: FIGHT,
   BAND: BAND,
   SC: SC,
-  VENUE: VENUE, TP: TP, ITL: ITL, MUS: MUS, AE: AE,
+  VENUE: VENUE,
+  TP: TP,
+  ITL: ITL,
+  MUS: MUS,
+  AE: AE,
   setAuto: setAuto,
   releaseAllInput: releaseAllInput,
   fingerVisual: fingerVisual,
+  stopShow: stopShow,
   bed: bed
 });
-SMELLY.METEOR = METEOR;
+const SMELLY = new SmellyScene({
+  UI: UI,
+  GAME: GAME,
+  CROWD: CROWD,
+  METEOR: METEOR,
+  FIGHT: FIGHT,
+  BAND: BAND,
+  SC: SC,
+  randomLook: randomLook
+});
 
 function initScene() {
   const canvas = document.getElementById('scene');
@@ -17280,6 +17198,8 @@ function onResize() {
   if (ME.rig) placeMe();
 }
 
+const _fallE = new THREE.Euler(0, 0, 0, 'XYZ');
+const _fallQ = new THREE.Quaternion();
 function aimCamera() {
   const e = LAYOUT.eye, l = LAYOUT.look;
   SC.camera.position.set(e[0], e[1], e[2]);
@@ -17291,10 +17211,33 @@ function aimCamera() {
     SC.camera.position.lerp(FIN.lay.eye, k);
     SC.camera.quaternion.slerp(FIN.lay.q, k);
   }
+
   if (FIGHT.on) {
-    const fall = smooth01((NOW.t - FIGHT.t0 - 1.55) / 1.45);
-    FIGHT.fall = fall; SC.camera.position.y -= fall * 1.28; SC.camera.position.z += fall * 0.35;
-    SC.camera.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(fall * 0.32, 0, -fall * 1.22, "XYZ")));
+    const a = NOW.t - FIGHT.t0 - 1.55;
+    FIGHT.fall = smooth01(a / 1.45);
+
+    if (a > 0) {
+      const jolt = Math.exp(-a * 9) * Math.sin(a * 32);
+
+      const f = clamp01((a - 0.15) / 1.25);
+      const drop = f * f;
+      const tip = smooth01(f);
+
+      const ia = Math.max(0, a - 1.4);
+      const bounce = Math.exp(-ia * 5) * Math.abs(Math.sin(ia * 14)) * 0.08 * (ia > 0);
+      const thud = Math.exp(-ia * 8) * Math.sin(ia * 40) * 0.03;
+
+      const daze = smooth01((a - 1.6) / 0.8);
+      const swayR = Math.sin(a * 1.3) * 0.025 * daze;
+      const swayP = Math.sin(a * 0.9) * 0.02 * daze;
+
+      SC.camera.position.y -= drop * 1.28 - bounce;
+      SC.camera.position.z += tip * 0.35;
+      SC.camera.position.x += Math.sin(a * 6) * 0.05 * tip * (1 - f * 0.5);   // staggering sideways
+
+      _fallE.set(tip * 0.32 - jolt * 0.08 + thud + swayP, Math.sin(a * 4) * 0.05 * tip * (1 - daze), -tip * 1.22 + jolt * 0.05 + swayR);
+      SC.camera.quaternion.multiply(_fallQ.setFromEuler(_fallE));
+    }
   }
 }
 
