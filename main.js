@@ -13,6 +13,7 @@ import BED from './js/audio/BED.js';
 import FightScene from './js/scenes/FightScene.js';
 import SmellyScene from './js/scenes/SmellyScene.js';
 import MeteorScene from './js/scenes/MeteorScene.js';
+import BartenderScene from './js/scenes/BartenderScene.js';
 import { stopBandVoices, trackBandVoice } from './js/audio/BandVoice.js';
 import { latheY } from './js/utils/GeomUtils.js';
 import { clamp, clamp01, smooth01, lerp, rateFor, damp, mod12, smoothstep, dampAngle, lerpAngle } from './js/utils/Math.js';
@@ -9995,8 +9996,12 @@ function crowdUpdate(dt, t, beat) {
     SMELLY.update(dt, t, beat);
     return;
   }
+  if (BAR.on) {
+    BAR.update(dt, t, beat);
+    return;
+  }
   if (FIGHT.on) {
-    FIGHT.updatethis(dt, t, beat);
+    FIGHT.updateCrowd(dt, t, beat);
     return;
   }
 
@@ -13355,6 +13360,7 @@ function initUI() {
     bandCrazy: $('bandCrazy'),
     meteor: $('meteor'),
     smellyPerson: $('smellyPerson'),
+    bartenderRiot: $('bartenderRiot'),
     customMenu: $('customMenu'),
     customToggle: $('customToggle'),
     customPanel: $('customPanel'),
@@ -13377,10 +13383,11 @@ function initUI() {
   UI.el.pause.onclick = () => pauseGame();
   UI.el.nextSong.onclick = () => nextSong();
   UI.el.customToggle.onclick = () => toggleCustomMenu();
-  UI.el.fight.onclick = () => { closeCustomMenu(); fightStart(); };
   UI.el.bandCrazy.onclick = () => { closeCustomMenu(); makeBandCrazy(); };
-  UI.el.meteor.onclick = () => { closeCustomMenu(); METEOR.begin(); }
+  UI.el.fight.onclick = () => { closeCustomMenu(); FIGHT.start(); };
+  UI.el.meteor.onclick = () => { closeCustomMenu(); METEOR.start(); }
   UI.el.smellyPerson.onclick = () => { closeCustomMenu(); SMELLY.start(); }
+  UI.el.bartenderRiot.onclick = () => { closeCustomMenu(); BAR.start(); }
   $('gameOverHome').onclick = () => location.reload();
   // 첫 화면은 아무 데나 눌러도 시작
   UI.el.title.addEventListener('click', e => {
@@ -13465,7 +13472,7 @@ async function startGame() {
     UI.el.startLabel.textContent = '곧 시작';
     try {
       if (AE.ctx.state !== 'running') AE.ctx.resume().catch(() => { });
-    } catch (e) { }
+    } catch { }
     return;
   }
   UI.starting = true;
@@ -14912,37 +14919,6 @@ const FIN_PENQ = (() => {
   const d = V3(0.5, -0.5, 0.72).normalize(), a = V3(0, 1, 0).addScaledVector(d, -d.y).normalize(), x = new THREE.Vector3().crossVectors(a, d);
   return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, a, d));
 })();
-
-function fightStart() {
-  if (FIGHT.on || !UI.playing || (GAME.phase !== "play" && GAME.phase !== "pre")) return;
-  FIGHT.on = true; FIGHT.t0 = NOW.t; FIGHT.booUntil = 0; FIGHT.gameOver = false;
-  FIN.req = true;
-  setAuto(false);
-  releaseAllInput();
-  fingerVisual(null);
-  TP.blowing = false;
-  TP.voice = null;
-  MUS.running = false;
-  if (AE.ctx) stopBandVoices(AE.ctx.currentTime);
-  if (ITL.cur) itlEnd();
-  for (const id of ["fight", "endShow", "nextSong", "pause", "hudMode", "autoMode", "special", "finishHint", "finBar", "customMenu"]) { const el = document.getElementById(id); if (el) el.style.display = "none"; }
-  document.getElementById("controls").classList.add("off");
-  REACT.burst = null;
-  bed.set("applause", 0);
-  bed.set("babble", 0);
-  for (const m of CROWD.list) {
-    m.fightStart = m.p.root.position.clone();
-    m.fightFace = 'shock';
-    m.act = null;
-    m.pending = null;
-    m.p.express('jawdrop', 1.15);
-    m.p.c.stand = 1;
-    m.p.c.step = 0;
-    m.p.c.lean = 0;
-  }
-  for (const m of BAND.members) stare(m, 4.8, 'jawdrop', 0.9);
-  aimCamera();
-}
 
 function finRequest() {
   if (FIN.req || FIN.on || GAME.phase !== 'play' || !UI.playing || !AE.ctx || !MUS.running) return;
@@ -17094,13 +17070,14 @@ const GAME = {
 
 let VENUE = null;
 const FIGHT = new FightScene({
-  GAME: GAME,
   CROWD: CROWD,
   ME: ME,
   UI: UI,
   AE: AE,
   SC: SC,
+  BAND: BAND,
   VOWEL: VOWEL,
+  stare: stare,
   stopShow: stopShow,
   capsuleBetween: capsuleBetween,
   toonMat: toonMat,
@@ -17109,32 +17086,20 @@ const FIGHT = new FightScene({
 });
 const METEOR = new MeteorScene({
   UI: UI,
-  GAME: GAME,
-  CROWD: CROWD,
-  FIGHT: FIGHT,
-  BAND: BAND,
   SC: SC,
+  CROWD: CROWD,
+  BAND: BAND,
   VENUE: VENUE,
-  TP: TP,
-  ITL: ITL,
-  MUS: MUS,
-  AE: AE,
-  setAuto: setAuto,
-  releaseAllInput: releaseAllInput,
-  fingerVisual: fingerVisual,
   stopShow: stopShow,
-  bed: bed
 });
 const SMELLY = new SmellyScene({
   UI: UI,
-  GAME: GAME,
-  CROWD: CROWD,
-  METEOR: METEOR,
-  FIGHT: FIGHT,
-  BAND: BAND,
   SC: SC,
+  CROWD: CROWD,
+  BAND: BAND,
   randomLook: randomLook
 });
+const BAR = new BartenderScene({ SC: SC, UI: UI, CROWD: CROWD });
 
 function initScene() {
   const canvas = document.getElementById('scene');

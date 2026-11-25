@@ -4,7 +4,7 @@ import { Person } from '../objects/person.js';
 import { smooth01, lerp, lerpAngle, clamp01 } from '../utils/Math.js';
 
 export default class SmellyScene {
-  static T = {
+  static T = Object.freeze({
     arrive: 1.55,      // victim finishes walking in
     angerStart: 1.2,   // crowd turns angry
     scareStart: 1.45,  // victim screams
@@ -19,7 +19,7 @@ export default class SmellyScene {
     flightDur: 0.9,    // time in the air
     returnDur: 1.35,   // crowd walks back to its spots
     end: 9.4
-  };
+  });
   static START = new THREE.Vector3(4.8, 0, -4.15);
   static TARGET = new THREE.Vector3(1.05, 0, -3.35);
   // Door the statue is carried to, and the spot outside where it lands.
@@ -51,12 +51,8 @@ export default class SmellyScene {
 
     Object.assign(this, {
       UI: null,
-      GAME: null,
-      CROWD: null,
-      METEOR: null,
-      FIGHT: null,
-      BAND: null,
       SC: null,
+      CROWD: null,
       randomLook: () => null,
     }, o)
   }
@@ -64,8 +60,7 @@ export default class SmellyScene {
   // ---------- lifecycle ----------
 
   start() {
-    if (this.on || !this.UI.playing || this.FIGHT.on || this.METEOR.on) return;
-    if (this.GAME.phase !== 'play' && this.GAME.phase !== 'pre') return;
+    if (this.on || !this.UI.playing) return;
 
     // Clear leftovers from a previous run (old statue, smoke).
     this.disposePerson();

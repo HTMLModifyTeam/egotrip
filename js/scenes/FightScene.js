@@ -12,7 +12,7 @@ const easeOutBack = (x) => {
 };
 
 export default class FightScene {
-  static T = {
+  static T = Object.freeze({
     handEnter: 0.5,    // hand slides in (with a little overshoot)
     handExit: 1.0,     // hand starts dropping
     handExitDur: 0.35,
@@ -23,7 +23,7 @@ export default class FightScene {
     shock_face_fade: 1.15,   // seconds for the initial jaw-drop to ease in
     recoilDur: 0.25,         // how fast the crowd flinches back
     recoilDist: 0.14         // how far they flinch
-  };
+  });
   static HAND_DIST = 0.62;
   static HAND_SCALE = 0.78;
   static SKIN = '#f1b892';
@@ -43,13 +43,14 @@ export default class FightScene {
     this.ballGeo = null;   // shared unit sphere for knuckles and tips
 
     Object.assign(this, {
-      GAME: null,
       CROWD: null,
       ME: null,
       UI: null,
       AE: null,
       SC: null,
+      BAND: null,
       VOWEL: null,
+      stare: (m, dur, face = 'awe', turn = 1) => null,
       stopShow: (b) => null,
       capsuleBetween: (a, b, r, mat) => null,
       toonMat: (b) => null,
@@ -261,11 +262,6 @@ export default class FightScene {
     }
   }
 
-  /** Old name kept so existing call sites don't break. */
-  updatethis(dt, t, beat) {
-    return this.updateCrowd(dt, t, beat);
-  }
-
   #boo(t, intensity = 1) {
     if (t <= this.booUntil || !this.AE.decoded || !this.AE.ctx) return;
     this.booUntil = t + FightScene.T.booEvery;
@@ -284,20 +280,18 @@ export default class FightScene {
   }
 
   /** Starts the fight. Replaces the old reset(). */
-  begin() {
+  start() {
     if (this.on || !this.UI.playing) return;
-    if (this.GAME.phase !== 'play' && this.GAME.phase !== 'pre') return;
 
     this.on = true;
     this.t0 = NOW.t;
     this.booUntil = 0;
     this.gameOver = false;
-    FIN.req = true;
 
     this.stopShow();
     this.#hideUI();
     this.#freezeCrowd();
-    for (const m of BAND.members) stare(m, 4.8, 'jawdrop', 0.9);
+    for (const m of this.BAND.members) this.stare(m, 4.8, 'jawdrop', 0.9);
     this.aimCamera();
   }
 

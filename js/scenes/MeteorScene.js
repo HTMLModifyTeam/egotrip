@@ -141,7 +141,7 @@ class ParticlePool {
   }
 }
 export default class MeteorScene {
-  static T = {
+  static T = Object.freeze({
     flight: 1.7, // seconds from spawn to impact
     nearStart: 0.75, // pre-impact rumble begins
     nearDur: 0.95,
@@ -151,7 +151,7 @@ export default class MeteorScene {
     hitStop: 0.09, // near-freeze on the impact frame (real seconds)
     slowMoRamp: 0.75, // then ease back to full speed over this
     shockSpeed: 24 // blast front travel speed (units/s) -> outward ripple
-  };
+  });
   static GRAVITY = 9.8;
   static SPAWN_DIST = 1.65; // target distance in front of camera
   static SHARDS = 36; // first CHUNKS of these are larger, slower fragments
@@ -197,29 +197,19 @@ export default class MeteorScene {
     this.smokeAcc = 0;
     this.flashEl = null;
     this.heatEl = null;
-    this.FIGHT = null;
     Object.assign(this, {
       UI: null,
-      GAME: null,
+      SC: null,
       CROWD: null,
       BAND: null,
-      SC: null,
       VENUE: null,
-      TP: null,
-      ITL: null,
-      MUS: null,
-      AE: null,
-      setAuto: (b) => null,
-      releaseAllInput: () => null,
-      fingerVisual: (b) => null,
-      stopShow: (b) => null,
-      bed: null
+      stopShow: (b) => null
     }, o);
   }
+
   // ---------- lifecycle ----------
-  begin() {
-    if (this.on || this.FIGHT.on || !this.UI.playing) return;
-    if (this.GAME.phase !== 'play' && this.GAME.phase !== 'pre') return;
+  start() {
+    if (this.on || !this.UI.playing) return;
     if (!this.group) return;
     this.on = true;
     this.impacted = false;

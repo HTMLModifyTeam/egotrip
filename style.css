@@ -933,10 +933,30 @@ button {
     top: calc(10px + var(--sat))
   }
 }
-
 .smelly-action {
   color: var(--paper);
   background: #82913e;
   font-weight: 900;
   justify-content: center;
+}
+
+.riot-action {
+  color: var(--paper);
+  background: #b52f35;
+  font-weight: 900;
+  justify-content: center;
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .custom-menu {
+    left: calc(10px + var(--sal));
+    top: calc(120px + var(--sat));
+    align-items: flex-start;
+    max-height: calc(100dvh - 140px - var(--sat) - var(--sab));
+  }
+  .custom-panel {
+    max-height: calc(100dvh - 200px - var(--sat) - var(--sab));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
